@@ -11,6 +11,7 @@ import {
 
 /* ─── STORAGE ─── */
 const STORAGE_KEY = "resell-hub-data";
+const ARCHIVE_KEY = "resell-hub-archive";
 
 function loadArticles() {
   try {
@@ -26,6 +27,23 @@ function saveArticles(articles) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(articles));
   } catch (e) {
     console.error("Save failed:", e);
+  }
+}
+
+function loadArchive() {
+  try {
+    const raw = localStorage.getItem(ARCHIVE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveArchive(archive) {
+  try {
+    localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive));
+  } catch (e) {
+    console.error("Save archive failed:", e);
   }
 }
 
@@ -55,6 +73,7 @@ const tooltipStyle = {
 export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [articles, setArticles] = useState(() => loadArticles());
+  const [archive, setArchive] = useState(() => loadArchive());
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("tutti");
   const [brandSearch, setBrandSearch] = useState("");
@@ -75,9 +94,12 @@ export default function App() {
   // Auto-save with debounce
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => saveArticles(articles), 300);
+    saveTimer.current = setTimeout(() => {
+      saveArticles(articles);
+      saveArchive(archive);
+    }, 300);
     return () => clearTimeout(saveTimer.current);
-  }, [articles]);
+  }, [articles, archive]);
 
   const showToast = useCallback((msg, type = "ok") => {
     setToast({ msg, type });
@@ -139,24 +161,32 @@ export default function App() {
   }
 
   function deleteArticle(id) {
+    const item = articles.find((a) => a.id === id);
+    if (item && item.venduto) {
+      // Sold items go to archive — stats are preserved
+      setArchive((prev) => [...prev, item]);
+    }
     setArticles((prev) => prev.filter((a) => a.id !== id));
-    showToast("Eliminato", "err");
+    showToast(item?.venduto ? "Archiviato (stats mantenute)" : "Eliminato", item?.venduto ? "ok" : "err");
   }
 
   function handleReset() {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(ARCHIVE_KEY);
     setArticles([]);
+    setArchive([]);
     setShowReset(false);
     showToast("Tutto azzerato");
   }
 
   function exportCSV() {
-    if (!articles.length) {
+    const allItems = [...articles, ...archive];
+    if (!allItems.length) {
       showToast("Nessun dato da esportare", "err");
       return;
     }
     const headers = ["Nome", "Brand", "Categoria", "Taglia", "Condizione", "Genere", "Costo", "Prezzo Listino", "Prezzo Vendita", "Margine", "Margine%", "Fonte", "Stato", "Data Acquisto", "Data Vendita", "Note"];
-    const rows = articles.map((a) => {
+    const rows = allItems.map((a) => {
       const soldPrice = a.venduto ? (a.prezzoVendita ?? a.prezzo) : a.prezzo;
       const margin = soldPrice - a.costo;
       const pct = a.costo > 0 ? ((margin / a.costo) * 100).toFixed(1) : "0";
@@ -190,15 +220,17 @@ export default function App() {
 
   const venduti = articles.filter((a) => a.venduto);
   const inVendita = articles.filter((a) => !a.venduto);
-  const totGuadagno = venduti.reduce((s, a) => s + getMargin(a), 0);
-  const totInvestito = venduti.reduce((s, a) => s + a.costo, 0);
-  const totInvestitoTutto = articles.reduce((s, a) => s + a.costo, 0);
+  // Include archived sold items in all dashboard stats
+  const allSold = [...venduti, ...archive];
+  const totGuadagno = allSold.reduce((s, a) => s + getMargin(a), 0);
+  const totInvestito = allSold.reduce((s, a) => s + a.costo, 0);
+  const totInvestitoTutto = articles.reduce((s, a) => s + a.costo, 0) + archive.reduce((s, a) => s + a.costo, 0);
   const roi = totInvestito > 0 ? ((totGuadagno / totInvestito) * 100).toFixed(0) : 0;
 
-  // Monthly profit
+  // Monthly profit (includes archive)
   const monthlyData = (() => {
     const months = {};
-    venduti.forEach((a) => {
+    allSold.forEach((a) => {
       const k = getMonthLabel(a.dataVendita || a.dataAcquisto);
       if (!months[k]) months[k] = { mese: k, profitto: 0, vendite: 0 };
       months[k].profitto += getMargin(a);
@@ -217,10 +249,10 @@ export default function App() {
     return Object.entries(cats).map(([name, value]) => ({ name, value }));
   })();
 
-  // Source performance
+  // Source performance (includes archive)
   const sourceData = (() => {
     const sources = {};
-    venduti.forEach((a) => {
+    allSold.forEach((a) => {
       if (!sources[a.fonte])
         sources[a.fonte] = { fonte: a.fonte, profitto: 0, count: 0 };
       sources[a.fonte].profitto += getMargin(a);
@@ -288,7 +320,7 @@ export default function App() {
           <div style={{ animation: "fadeIn 0.3s ease" }}>
             <div style={S.statsRow}>
               <StatCard label="Articoli" value={articles.length} color="var(--accent)" />
-              <StatCard label="Venduti" value={venduti.length} color="var(--green)" />
+              <StatCard label="Venduti" value={allSold.length} color="var(--green)" />
               <StatCard label="In vendita" value={inVendita.length} color="var(--yellow)" />
               <StatCard label="ROI" value={roi + "%"} color="#60a5fa" />
             </div>
@@ -588,6 +620,16 @@ export default function App() {
         {/* ═══ BRAND GUIDE ═══ */}
         {tab === "brands" && (
           <div style={{ animation: "fadeIn 0.3s ease" }}>
+            {/* Spiegazione */}
+            <div style={{ ...S.card, marginBottom: 14, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>
+                📖 <strong style={{ color: "var(--text)" }}>Come leggere questa guida:</strong> ogni brand ha un
+                <strong style={{ color: "var(--accent)" }}> margine tipico</strong> — è la percentuale di guadagno che puoi aspettarti
+                rivendendo (es. 85% = compri a 10€, rivendi a ~18.50€).
+                I tag indicano: 🔥 = molto richiesto, ⚡ = si vende veloce, 💎 = lusso (servono più soldi), 🕰 = il vintage vale di più.
+              </div>
+            </div>
+
             <div style={{ position: "relative", marginBottom: 12 }}>
               <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--dim)" }} />
               <input
@@ -607,14 +649,15 @@ export default function App() {
             <div style={S.brandGrid}>
               {filteredBrands.map((b, i) => (
                 <div key={b.name} style={{ ...S.brandCard, animation: `slideUp 0.3s ease ${i * 0.04}s forwards`, opacity: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                  {/* Header: nome + margine */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                     <div>
-                      <div style={{ fontSize: 15, fontWeight: 500, color: "var(--text)" }}>{b.name}</div>
+                      <div style={{ fontSize: 16, fontWeight: 500, color: "var(--text)" }}>{b.name}</div>
                       <div style={{ fontSize: 10, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase" }}>{b.type}</div>
                     </div>
-                    <div style={S.marginBadge}>{b.margin}%</div>
                   </div>
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+                  {/* Tags */}
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
                     {b.tags.map((t) => {
                       const cfg = TAG_CONFIG[t];
                       return (
@@ -624,16 +667,29 @@ export default function App() {
                       );
                     })}
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5, marginBottom: 8 }}>{b.note}</div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--dim)", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
-                    <span>📍 {b.source}</span>
-                    <span>💰 {b.prezzo}</span>
+                  {/* Consiglio */}
+                  <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.6, marginBottom: 10 }}>{b.note}</div>
+                  {/* Info chiare */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                    <div style={S.brandInfoBox}>
+                      <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Dove trovarlo</div>
+                      <div style={{ fontSize: 11, color: "var(--text2)" }}>{b.source}</div>
+                    </div>
+                    <div style={S.brandInfoBox}>
+                      <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 3 }}>Prezzo acquisto</div>
+                      <div style={{ fontSize: 11, color: "var(--text2)" }}>{b.prezzo}</div>
+                    </div>
                   </div>
-                  <div style={{ height: 3, background: "var(--surface2)", borderRadius: 2, marginTop: 8 }}>
+                  {/* Margine bar con label chiara */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1 }}>Margine tipico</span>
+                    <span style={{ fontSize: 14, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{b.margin}%</span>
+                  </div>
+                  <div style={{ height: 4, background: "var(--surface2)", borderRadius: 3 }}>
                     <div
                       style={{
                         height: "100%",
-                        borderRadius: 2,
+                        borderRadius: 3,
                         background: `linear-gradient(90deg, var(--accent), ${b.margin > 80 ? "var(--green)" : "var(--yellow)"})`,
                         width: `${b.margin}%`,
                         transition: "width 0.5s ease",
@@ -1056,6 +1112,11 @@ const S = {
     fontWeight: 500,
     color: "var(--accent)",
     fontFamily: "'Playfair Display', serif",
+  },
+  brandInfoBox: {
+    background: "var(--surface2)",
+    borderRadius: 6,
+    padding: "8px 10px",
   },
   tipsGrid: {
     display: "grid",

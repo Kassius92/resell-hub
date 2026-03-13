@@ -1611,3 +1611,129 @@ export function getLearnStats() {
   });
   return { total: data.length, byBrand };
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   MOTORE RACCOMANDAZIONI — "Cosa comprare adesso"
+   ═══════════════════════════════════════════════════════════════ */
+
+const MONTH_NAMES_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+
+export function getRecommendations() {
+  const month = new Date().getMonth() + 1; // 1-12
+  const monthName = MONTH_NAMES_IT[month - 1];
+
+  /* 1. Tipi di capo in stagione adesso */
+  const hotTypes = [];
+  const nearTypes = [];
+  const offTypes = [];
+  for (const [tipo, months] of Object.entries(SEASON_HOT)) {
+    if (months.includes(month)) {
+      hotTypes.push(tipo);
+    } else {
+      const dists = months.map(m => Math.min(Math.abs(month - m), 12 - Math.abs(month - m)));
+      const minDist = Math.min(...dists);
+      if (minDist <= 2) nearTypes.push({ tipo, inMonths: minDist });
+      else offTypes.push(tipo);
+    }
+  }
+  /* Tipi tutto-anno (non in SEASON_HOT) */
+  const allYearTypes = TIPI_CAPO.filter(t => !SEASON_HOT[t]);
+
+  /* 2. Build recommendations: brand + tipo combos scored */
+  const recs = [];
+
+  for (const [brandName, db] of Object.entries(PRICE_DB)) {
+    if (!db || brandName.startsWith("_")) continue;
+    const demand = db._demand || 2;
+    const tier = db._tier || "unknown";
+    const fakeRisk = db._fakeRisk || "basso";
+
+    /* Get all tipo entries for this brand */
+    const tipos = Object.keys(db).filter(k => !k.startsWith("_"));
+
+    for (const tipo of tipos) {
+      const price = db[tipo];
+      if (!price || !price.min) continue;
+
+      const isHot = hotTypes.includes(tipo);
+      const isNear = nearTypes.some(n => n.tipo === tipo);
+      const isAllYear = allYearTypes.includes(tipo);
+
+      /* Score: demand(0-5) + season(0-3) + margin potential(0-3) - risk(0-2) */
+      let score = demand;
+      if (isHot) score += 3;
+      else if (isNear) score += 1.5;
+      else if (isAllYear) score += 1;
+      else score -= 1; /* off season */
+
+      /* Margin potential based on price range width */
+      const marginPotential = (price.max - price.min) / Math.max(price.min, 1);
+      if (marginPotential > 1) score += 2;
+      else if (marginPotential > 0.5) score += 1;
+
+      /* Risk penalty */
+      if (fakeRisk === "alto") score -= 1.5;
+      else if (fakeRisk === "medio") score -= 0.5;
+
+      /* Budget category */
+      let budget;
+      if (price.min <= 15) budget = "basso";
+      else if (price.min <= 40) budget = "medio";
+      else budget = "alto";
+
+      /* Build reason */
+      const reasons = [];
+      if (isHot) reasons.push(`In piena stagione a ${monthName}`);
+      else if (isNear) reasons.push(`Quasi in stagione — pubblica ora per il picco`);
+      else if (isAllYear) reasons.push("Si vende tutto l'anno");
+
+      if (demand >= 5) reasons.push("Domanda altissima su Vinted");
+      else if (demand >= 4) reasons.push("Domanda alta su Vinted");
+
+      if (marginPotential > 1) reasons.push(`Margini potenziali molto alti`);
+      else if (marginPotential > 0.5) reasons.push("Buoni margini");
+
+      if (fakeRisk === "alto") reasons.push("⚠️ Attenzione ai falsi");
+      if (tier === "fast-fashion") reasons.push("Margini stretti — serve volume");
+
+      recs.push({
+        brand: brandName, tipo, score: Math.round(score * 10) / 10,
+        priceMin: price.min, priceMax: price.max,
+        demand, tier, fakeRisk, budget, reasons,
+        isHot, isNear, isAllYear,
+      });
+    }
+  }
+
+  /* Sort by score desc */
+  recs.sort((a, b) => b.score - a.score);
+
+  /* 3. Build sections */
+
+  /* Top picks: best overall score, limit 8 */
+  const topPicks = recs.slice(0, 8);
+
+  /* Hot right now: only in-season items, sorted by score */
+  const hotNow = recs.filter(r => r.isHot).slice(0, 10);
+
+  /* Prepara per il prossimo mese: near-season items */
+  const prepareNext = recs.filter(r => r.isNear).slice(0, 6);
+
+  /* Budget picks: best score under 15€ min price */
+  const budgetPicks = recs.filter(r => r.budget === "basso").slice(0, 6);
+
+  /* High margin: highest price range */
+  const highMargin = [...recs].sort((a, b) => (b.priceMax - b.priceMin) - (a.priceMax - a.priceMin)).slice(0, 6);
+
+  /* Off-season deals: buy cheap now, sell later */
+  const offSeason = recs.filter(r => !r.isHot && !r.isNear && !r.isAllYear && r.demand >= 4)
+    .sort((a, b) => b.demand - a.demand).slice(0, 6)
+    .map(r => ({
+      ...r,
+      reasons: [`Fuori stagione ora — compralo a poco ai mercatini`, `Domanda alta quando torna in stagione`, ...r.reasons.filter(x => !x.includes("stagione"))],
+    }));
+
+  return {
+    month, monthName, topPicks, hotNow, prepareNext, budgetPicks, highMargin, offSeason,
+  };
+}

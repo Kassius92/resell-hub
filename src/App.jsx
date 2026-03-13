@@ -3,10 +3,10 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from "recharts";
-import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, BookOpen, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil, Lock, ChevronUp } from "lucide-react";
+import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, BookOpen, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil, Lock, ChevronUp, ShoppingBag, TrendingUp, Zap, DollarSign, Clock } from "lucide-react";
 import {
   BRANDS, GUIDA, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore,
-  TIPI_CAPO, BRAND_LIST, evaluateItem, recordSale
+  TIPI_CAPO, BRAND_LIST, evaluateItem, recordSale, getRecommendations
 } from "./data";
 
 /* ─── STORAGE ─── */
@@ -738,293 +738,79 @@ export default function App() {
           </div>
         )}
 
-        {/* ═══ BRAND GUIDE ═══ */}
-        {tab === "brands" && !selectedBrand && (
-          <div style={{ animation: "fadeIn 0.3s ease" }}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center" }}>
-              <div style={{ position: "relative", flex: 1 }}>
-                <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--dim)" }} />
-                <input value={brandSearch} onChange={(e) => setBrandSearch(e.target.value)} placeholder="Cerca brand..." style={{ ...S.input, paddingLeft: 34 }} />
-              </div>
-              <SortSelect value={brandSort} onChange={setBrandSort} options={[
-                { value: "score", label: "Punteggio ↑" }, { value: "margine", label: "Margine ↑" }, { value: "domanda", label: "Domanda ↑" },
-                { value: "velocita", label: "Più veloci" }, { value: "nome", label: "Nome A-Z" },
-              ]} />
-            </div>
-
-            {sortedBrands.map((b, i) => (
-              <div key={b.custom ? b.id : b.name} onClick={() => setSelectedBrand(b)} style={{ ...S.brandRow, cursor: "pointer", animation: `slideUp 0.25s ease ${i * 0.03}s forwards`, opacity: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                      <span style={{ fontSize: 15, fontWeight: 500, color: "var(--text)" }}>{b.name}</span>
-                      {b.custom && <span style={{ fontSize: 8, padding: "1px 6px", borderRadius: 3, background: "rgba(212,245,94,0.15)", color: "var(--accent)", border: "1px solid rgba(212,245,94,0.2)", letterSpacing: 1, textTransform: "uppercase" }}>Tuo</span>}
-                    </div>
-                    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <DemandDots level={b.domanda} />
-                      </span>
-                      <span style={{ fontSize: 11, fontWeight: 500, color: b.velocita === "1-3 giorni" ? "var(--green)" : b.velocita === "3-7 giorni" ? "var(--yellow)" : "var(--red)" }}>{b.velocita}</span>
-                      <span style={{ fontSize: 10, color: "var(--dim)" }}>{b.prezzo}</span>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 10 }}>
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{calcScore(b)}</div>
-                      <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>/ 10</div>
-                    </div>
-                    <ChevronRight size={16} style={{ color: "var(--dim)" }} />
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {/* Add custom brand button */}
-            <button onClick={() => { setShowAddBrand(true); setEditingBrand(null); setBrandForm({ name: "", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 2, note: "", source: "", prezzo: "", prezzoVendita: "", consiglio: "" }); }} style={{ ...S.brandRow, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--accent)", border: "1px dashed var(--border)", opacity: 1 }}>
-              <PlusCircle size={16} /> <span style={{ fontSize: 12 }}>Aggiungi un tuo brand</span>
-            </button>
-          </div>
-        )}
-
-        {/* ═══ BRAND DETAIL PAGE ═══ */}
-        {tab === "brands" && selectedBrand && (() => {
-          const b = selectedBrand;
-          const score = calcScore(b);
-          const brandName = b.name.toLowerCase();
-          const myItems = articles.filter((a) => a.brand.toLowerCase() === brandName);
-          const mySold = [...myItems.filter((a) => a.venduto), ...archive.filter((a) => a.brand.toLowerCase() === brandName)];
-          const myProfit = mySold.reduce((s, a) => s + getMargin(a), 0);
-          const myAvgMargin = mySold.length > 0 ? (myProfit / mySold.length).toFixed(2) : null;
-          const falsiColor = b.rischioFalsi === "alto" ? "var(--red)" : b.rischioFalsi === "medio" ? "var(--yellow)" : "var(--green)";
+        {/* ═══ COSA COMPRARE ═══ */}
+        {tab === "acquista" && (() => {
+          const rec = getRecommendations();
+          const sections = [
+            { key: "top", title: `Top acquisti — ${rec.monthName}`, icon: "🏆", desc: "I pezzi migliori da comprare adesso per margine, domanda e stagionalità.", items: rec.topPicks },
+            { key: "hot", title: "In stagione adesso", icon: "🔥", desc: "Questi tipi di capo si vendono velocemente in questo periodo.", items: rec.hotNow },
+            { key: "prepare", title: "Prepara il prossimo mese", icon: "📅", desc: "Compra ora a poco — la domanda sta per salire.", items: rec.prepareNext },
+            { key: "budget", title: "Budget basso (sotto 15€)", icon: "💰", desc: "Pezzi che trovi a poco nei mercatini e rivendita con buon margine.", items: rec.budgetPicks },
+            { key: "margin", title: "Margini più alti", icon: "📈", desc: "I pezzi con il range di prezzo più ampio — potenziale massimo.", items: rec.highMargin },
+            { key: "offseason", title: "Fuori stagione — fai scorta", icon: "🧊", desc: "Ora nessuno li cerca — comprali a poco e vendili quando torna la domanda.", items: rec.offSeason },
+          ].filter(s => s.items.length > 0);
 
           return (
-          <div style={{ animation: "fadeIn 0.2s ease" }}>
-            <button onClick={() => { setSelectedBrand(null); setBrandTab("comprare"); }} style={S.backBtn}>
-              <ArrowLeft size={16} /> Tutti i brand
-            </button>
-
-            {/* ─── NAME + BADGE ─── */}
-            <div style={{ marginBottom: 4 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <h2 style={{ fontSize: 26, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{b.name}</h2>
-                {b.custom && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: "rgba(212,245,94,0.15)", color: "var(--accent)", letterSpacing: 1, textTransform: "uppercase" }}>Tuo</span>}
+            <div style={{ animation: "fadeIn 0.3s ease" }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Cosa comprare</div>
+                <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 500 }}>Raccomandazioni per {rec.monthName} — basate su stagionalità, domanda e margini</div>
               </div>
-              {b.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{b.note}</div>}
-            </div>
 
-            {/* Vinted link */}
-            <a href={`https://www.vinted.it/catalog?search_text=${encodeURIComponent(b.name)}`} target="_blank" rel="noopener noreferrer"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--accent)", fontSize: 11, textDecoration: "none", marginBottom: 18, fontFamily: "'DM Mono', monospace" }}>
-              <ExternalLink size={13} /> Cerca su Vinted
-            </a>
+              {sections.map((sec) => (
+                <div key={sec.key} style={{ marginBottom: 20 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 18 }}>{sec.icon}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{sec.title}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--dim)", marginBottom: 10, lineHeight: 1.4 }}>{sec.desc}</div>
 
-            {/* ━━━━━━ BLOCCO 1 — VALE LA PENA? ━━━━━━ */}
-            <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Vale la pena?</div>
-
-            {/* Score prominent */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <div style={{ ...S.detailMetric, flex: "0 0 auto", minWidth: 90, background: "rgba(212,245,94,0.06)", borderColor: "rgba(212,245,94,0.15)", textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Score</div>
-                <div style={{ fontSize: 36, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{score}</div>
-                <div style={{ fontSize: 9, color: "var(--dim)" }}>/ 10</div>
-              </div>
-              <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <div style={S.detailMetric}>
-                  <div style={S.detailMetricLabel}>Margine</div>
-                  <div style={{ fontSize: 20, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{b.margine}%</div>
+                  {sec.items.map((item, i) => (
+                    <div key={`${item.brand}-${item.tipo}-${i}`}
+                      onClick={() => {
+                        setValutaForm(p => ({ ...p, brand: item.brand, tipo: item.tipo }));
+                        setValutaResult(null);
+                        setTab("aggiungi");
+                      }}
+                      style={{
+                        ...S.brandRow, cursor: "pointer",
+                        animation: `slideUp 0.25s ease ${i * 0.03}s forwards`, opacity: 0,
+                      }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}>{item.brand}</span>
+                            <span style={{ fontSize: 11, color: "var(--accent)", fontFamily: "'DM Mono', monospace" }}>{item.tipo}</span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
+                            {item.reasons.slice(0, 2).join(" · ")}
+                          </div>
+                          <div style={{ display: "flex", gap: 10, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(212,245,94,0.12)", color: "var(--accent)", fontFamily: "'DM Mono', monospace" }}>
+                              {item.priceMin}€ — {item.priceMax}€
+                            </span>
+                            <span style={{ display: "inline-flex", gap: 2 }}>
+                              {[1,2,3,4,5].map(d => (
+                                <span key={d} style={{
+                                  width: 6, height: 6, borderRadius: "50%",
+                                  background: d <= item.demand ? (item.demand >= 4 ? "var(--green)" : item.demand >= 3 ? "var(--yellow)" : "var(--red)") : "var(--surface2)",
+                                }} />
+                              ))}
+                            </span>
+                            {item.fakeRisk === "alto" && <span style={{ fontSize: 9, color: "var(--red)" }}>⚠️ Falsi</span>}
+                            {item.isHot && <span style={{ fontSize: 9, color: "var(--green)" }}>● In stagione</span>}
+                            {item.isNear && <span style={{ fontSize: 9, color: "var(--yellow)" }}>● Quasi in stagione</span>}
+                          </div>
+                        </div>
+                        <ChevronRight size={16} style={{ color: "var(--dim)", flexShrink: 0, marginLeft: 8 }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div style={S.detailMetric}>
-                  <div style={S.detailMetricLabel}>Vendita</div>
-                  <div style={{ fontSize: 13, fontWeight: 500, marginTop: 2, color: b.velocita === "1-3 giorni" ? "var(--green)" : b.velocita === "3-7 giorni" ? "var(--yellow)" : "var(--red)" }}>{b.velocita}</div>
-                </div>
-                <div style={S.detailMetric}>
-                  <div style={S.detailMetricLabel}>Domanda</div>
-                  <div style={{ marginTop: 4 }}><DemandDots level={b.domanda} /></div>
-                </div>
-                <div style={S.detailMetric}>
-                  <div style={S.detailMetricLabel}>Difficoltà</div>
-                  <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>{b.difficolta || `${b.difficoltaNum}/4`}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Prices side by side */}
-            {(b.prezzo || b.prezzoVendita) && (
-              <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-                {b.prezzo && <div style={{ ...S.detailMetric, flex: 1, textAlign: "center" }}>
-                  <div style={S.detailMetricLabel}>💰 Compri a</div>
-                  <div style={{ fontSize: 16, fontWeight: 500, color: "var(--red)" }}>{b.prezzo}</div>
-                </div>}
-                {b.prezzoVendita && <div style={{ ...S.detailMetric, flex: 1, textAlign: "center" }}>
-                  <div style={S.detailMetricLabel}>💸 Rivendi a</div>
-                  <div style={{ fontSize: 16, fontWeight: 500, color: "var(--green)" }}>{b.prezzoVendita}</div>
-                </div>}
-              </div>
-            )}
-
-            {/* ━━━━━━ BLOCCO 2 — COME FARLO BENE ━━━━━━ */}
-            <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Come farlo bene</div>
-
-            {/* Internal tabs */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 12, background: "var(--surface)", padding: 3, borderRadius: 6, border: "1px solid var(--border)" }}>
-              {[
-                { id: "comprare", label: "✅ Comprare" },
-                { id: "evitare", label: "⛔ Evitare" },
-                { id: "consigli", label: "💡 Consigli" },
-              ].map((t) => (
-                <button key={t.id} onClick={() => setBrandTab(t.id)} style={{
-                  flex: 1, padding: "8px 4px", fontSize: 10, border: "none", borderRadius: 4, cursor: "pointer",
-                  fontFamily: "'DM Mono', monospace", transition: "all 0.15s", letterSpacing: 0.5,
-                  background: brandTab === t.id ? "var(--accent)" : "transparent",
-                  color: brandTab === t.id ? "#000" : "var(--muted)",
-                  fontWeight: brandTab === t.id ? 500 : 400,
-                }}>{t.label}</button>
               ))}
             </div>
-
-            {/* Tab content */}
-            <div style={{ ...S.card, marginBottom: 20, minHeight: 120 }}>
-              {brandTab === "comprare" && (
-                <div style={{ animation: "fadeIn 0.2s ease" }}>
-                  {b.cosaMeglio?.length > 0 ? b.cosaMeglio.map((item, i) => (
-                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
-                      <span style={{ color: "var(--green)", fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>•</span>
-                      <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>{item}</span>
-                    </div>
-                  )) : <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessuna info — {b.custom ? "modifica il brand per aggiungere" : "info non disponibile"}</div>}
-
-                  {/* Taglie + Stagione + Dove trovarlo inline */}
-                  {(b.taglieTop?.length > 0 || b.stagione || b.source) && (
-                    <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
-                      {b.taglieTop?.length > 0 && <DetailRow label="Taglie top" value={b.taglieTop.join(", ")} />}
-                      {b.source && <DetailRow label="Dove trovarlo" value={b.source} />}
-                      {b.stagione && <DetailRow label="Stagione" value={b.stagione} />}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {brandTab === "evitare" && (
-                <div style={{ animation: "fadeIn 0.2s ease" }}>
-                  {b.cosaEvitare?.length > 0 ? b.cosaEvitare.map((item, i) => (
-                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
-                      <span style={{ color: "var(--red)", fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>•</span>
-                      <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>{item}</span>
-                    </div>
-                  )) : <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessuna info</div>}
-                </div>
-              )}
-
-              {brandTab === "consigli" && (
-                <div style={{ animation: "fadeIn 0.2s ease" }}>
-                  {b.consiglio ? (
-                    <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.7 }}>{b.consiglio}</div>
-                  ) : (
-                    <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessun consiglio — {b.custom ? "modifica il brand per aggiungere" : "info non disponibile"}</div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* ━━━━━━ BLOCCO 3 — ATTENZIONE + I TUOI DATI ━━━━━━ */}
-            <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Attenzione & dati</div>
-
-            {/* Rischio falsi */}
-            {b.rischioFalsi && (
-              <div style={{ ...S.card, marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--muted)" }}>⚠️ Rischio falsi</div>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: falsiColor, padding: "2px 8px", borderRadius: 4, background: b.rischioFalsi === "alto" ? "#301818" : b.rischioFalsi === "medio" ? "#302a18" : "#183018", border: `1px solid ${falsiColor}33` }}>
-                    {b.rischioFalsi.charAt(0).toUpperCase() + b.rischioFalsi.slice(1)}
-                  </span>
-                </div>
-                {b.controlloFalsi?.map((item, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-                    <span style={{ color: falsiColor, fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
-                    <span style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Storico personale */}
-            <div style={{ ...S.card, marginBottom: 16 }}>
-              <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>📊 I tuoi numeri su {b.name}</div>
-              {mySold.length === 0 && myItems.length === 0 ? (
-                <div style={{ fontSize: 11, color: "var(--dim)", fontStyle: "italic", textAlign: "center", padding: "10px 0" }}>
-                  Nessun dato — aggiungi articoli {b.name} nel tracker per vedere le tue stats
-                </div>
-              ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
-                    <div style={{ fontSize: 18, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{myItems.filter((a) => !a.venduto).length}</div>
-                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>In vendita</div>
-                  </div>
-                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
-                    <div style={{ fontSize: 18, fontWeight: 500, color: "var(--green)", fontFamily: "'Playfair Display', serif" }}>{mySold.length}</div>
-                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>Venduti</div>
-                  </div>
-                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
-                    <div style={{ fontSize: 18, fontWeight: 500, color: myProfit >= 0 ? "var(--green)" : "var(--red)", fontFamily: "'Playfair Display', serif" }}>{formatEur(myProfit)}</div>
-                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>Guadagno</div>
-                  </div>
-                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
-                    <div style={{ fontSize: 18, fontWeight: 500, color: "var(--text2)", fontFamily: "'Playfair Display', serif" }}>{myAvgMargin ? myAvgMargin + "€" : "—"}</div>
-                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>Margine medio</div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Edit/Delete for custom brands */}
-            {b.custom && (
-              <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-                <button onClick={() => startEditBrand(b)} style={{ ...S.addBtn, background: "var(--surface)", color: "var(--accent)", border: "1px solid var(--border)", flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <Pencil size={14} /> Modifica
-                </button>
-                <button onClick={() => deleteCustomBrand(b.id)} style={{ ...S.addBtn, background: "#301818", color: "var(--red)", border: "1px solid #f8717133", flex: 1 }}>
-                  Elimina
-                </button>
-              </div>
-            )}
-          </div>
           );
         })()}
-
-        {/* ═══ ADD/EDIT BRAND MODAL ═══ */}
-        {showAddBrand && (
-          <div style={S.overlay} onClick={() => { setShowAddBrand(false); setEditingBrand(null); }}>
-            <div style={{ ...S.modal, textAlign: "left", maxWidth: 420, maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text)", marginBottom: 14 }}>{editingBrand ? "Modifica brand" : "Aggiungi brand"}</div>
-              <Field label="Nome brand" required>
-                <input value={brandForm.name} onChange={(e) => setBrandForm((p) => ({...p, name: e.target.value}))} placeholder="es. Stüssy" style={S.input} />
-              </Field>
-              <div style={S.formRow}>
-                <Field label="Domanda (1-5)"><input type="number" min="1" max="5" value={brandForm.domanda} onChange={(e) => setBrandForm((p) => ({...p, domanda: e.target.value}))} style={S.input} /></Field>
-                <Field label="Margine %"><input type="number" min="0" max="100" value={brandForm.margine} onChange={(e) => setBrandForm((p) => ({...p, margine: e.target.value}))} style={S.input} /></Field>
-              </div>
-              <div style={S.formRow}>
-                <Field label="Velocità vendita">
-                  <select value={brandForm.velocita} onChange={(e) => setBrandForm((p) => ({...p, velocita: e.target.value}))} style={S.input}>
-                    {["1-3 giorni", "3-7 giorni", "1-2 settimane", "2-4 settimane"].map((v) => <option key={v}>{v}</option>)}
-                  </select>
-                </Field>
-                <Field label="Difficoltà (1-4)"><input type="number" min="1" max="4" value={brandForm.difficoltaNum} onChange={(e) => setBrandForm((p) => ({...p, difficoltaNum: e.target.value}))} style={S.input} /></Field>
-              </div>
-              <div style={S.formRow}>
-                <Field label="Prezzo acquisto"><input value={brandForm.prezzo} onChange={(e) => setBrandForm((p) => ({...p, prezzo: e.target.value}))} placeholder="10-30€" style={S.input} /></Field>
-                <Field label="Prezzo vendita"><input value={brandForm.prezzoVendita} onChange={(e) => setBrandForm((p) => ({...p, prezzoVendita: e.target.value}))} placeholder="25-60€" style={S.input} /></Field>
-              </div>
-              <Field label="Dove trovarlo"><input value={brandForm.source} onChange={(e) => setBrandForm((p) => ({...p, source: e.target.value}))} placeholder="Mercatini, Outlet..." style={S.input} /></Field>
-              <Field label="Note"><textarea value={brandForm.note} onChange={(e) => setBrandForm((p) => ({...p, note: e.target.value}))} placeholder="Info generali..." rows={2} style={{ ...S.input, resize: "vertical" }} /></Field>
-              <Field label="Consiglio"><textarea value={brandForm.consiglio} onChange={(e) => setBrandForm((p) => ({...p, consiglio: e.target.value}))} placeholder="Il tuo consiglio principale..." rows={2} style={{ ...S.input, resize: "vertical" }} /></Field>
-              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                <button onClick={() => { setShowAddBrand(false); setEditingBrand(null); }} style={S.modalCancel}>Annulla</button>
-                <button onClick={saveCustomBrand} style={S.modalConfirm}>{editingBrand ? "Salva" : "Aggiungi"}</button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ═══ STRATEGIE ═══ */}
         {tab === "tips" && (
@@ -1165,7 +951,7 @@ export default function App() {
           { id: "dashboard", icon: LayoutDashboard, label: "Home" },
           { id: "inventario", icon: Package, label: "Inventario" },
           { id: "aggiungi", icon: Plus, label: "Aggiungi", accent: true },
-          { id: "brands", icon: Tag, label: "Brand" },
+          { id: "acquista", icon: ShoppingBag, label: "Acquista" },
           { id: "tips", icon: BookOpen, label: "Guida" },
         ].map((t) => {
           const Icon = t.icon; const isActive = tab === t.id;

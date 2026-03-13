@@ -1,7 +1,10 @@
 /* ─── BRAND DATABASE ─── */
+// difficoltaNum: 1=bassissima, 2=bassa, 3=media, 4=alta (used for score calc)
+// rischioFalsi: "basso" | "medio" | "alto"
+// controlloFalsi: array of checks
 export const BRANDS = [
   {
-    name: "Gucci", domanda: 5, velocita: "1-3 giorni", margine: 95,
+    name: "Gucci", domanda: 5, velocita: "1-3 giorni", margine: 95, difficoltaNum: 4,
     note: "Brand più venduto in Italia nel segmento lusso.",
     source: "Privati, Vintage shops", prezzo: "60-400€",
     cosaMeglio: ["Cinture con logo GG", "Borse Dionysus e Marmont", "Sciarpe e foulard", "T-shirt con stampa logo vintage"],
@@ -11,9 +14,11 @@ export const BRANDS = [
     stagione: "Tutto l'anno, picco a Natale e San Valentino",
     consiglio: "Investi su accessori: cinture e borse hanno margini altissimi e si vendono in 24h. Sempre chiedere foto del serial number prima di comprare.",
     difficolta: "Alta — servono capitali e occhio per i falsi",
+    rischioFalsi: "alto",
+    controlloFalsi: ["Controlla il serial number all'interno (6 cifre + 4 cifre)", "Cuciture dritte e regolari, filo di qualità", "Dustbag e box originali (aumentano il valore)", "La stampa GG deve essere simmetrica e nitida", "Confronta con foto ufficiali dal sito Gucci"],
   },
   {
-    name: "Fendi", domanda: 5, velocita: "3-7 giorni", margine: 95,
+    name: "Fendi", domanda: 5, velocita: "3-7 giorni", margine: 95, difficoltaNum: 4,
     note: "Margini altissimi su borse e accessori.",
     source: "Privati, Aste", prezzo: "50-300€",
     cosaMeglio: ["Borse Baguette e Peekaboo", "Portafogli e cinture", "Foulard con logo FF"],
@@ -23,21 +28,25 @@ export const BRANDS = [
     stagione: "Tutto l'anno",
     consiglio: "La Baguette è tornata di moda grazie a Sex and the City. I modelli vintage anni 90-2000 valgono tantissimo. Cerca nelle aste online.",
     difficolta: "Alta — capitali importanti necessari",
+    rischioFalsi: "alto",
+    controlloFalsi: ["Controlla il serial number nella tasca interna", "Il pattern FF deve essere perfettamente allineato alle cuciture", "Hardware metallico pesante e inciso (non stampato)", "Etichetta 'Made in Italy' con font specifico", "Zip YKK o Lampo (mai zip generiche)"],
   },
   {
-    name: "Stone Island", domanda: 5, velocita: "1-3 giorni", margine: 92,
+    name: "Stone Island", domanda: 5, velocita: "1-3 giorni", margine: 92, difficoltaNum: 3,
     note: "Patch originale = vendita garantita.",
     source: "Privati, Vinted", prezzo: "40-150€",
     cosaMeglio: ["Felpe con patch sul braccio", "Giubbotti leggeri", "Pantaloni cargo", "Maglie a maniche lunghe"],
-    cosaEvitare: ["FALSI — il mercato è pieno. Controlla: cerchigramma sulla patch, QR code, etichetta interna", "Pezzi senza patch (valgono molto meno)"],
+    cosaEvitare: ["FALSI — il mercato è pieno", "Pezzi senza patch (valgono molto meno)"],
     prezzoVendita: "80-300€",
     taglieTop: ["M", "L", "XL"],
     stagione: "Autunno-Inverno per giubbotti, tutto l'anno per felpe",
     consiglio: "Il brand più sicuro per il resell in Italia. Se la patch è originale, vendi sempre. Compra da privati che non sanno il valore. Foto della patch = must nell'annuncio.",
     difficolta: "Media — i falsi sono il rischio principale",
+    rischioFalsi: "alto",
+    controlloFalsi: ["Cerchigramma sulla patch: deve cambiare colore sotto luce diversa", "QR code sulla patch scannerizzabile", "Etichetta interna con art. number verificabile su StoneIsland.com", "Bottoni con incisione 'Stone Island'", "Cuciture regolari e rifinite, mai fili sciolti"],
   },
   {
-    name: "Ralph Lauren", domanda: 5, velocita: "1-3 giorni", margine: 90,
+    name: "Ralph Lauren", domanda: 5, velocita: "1-3 giorni", margine: 90, difficoltaNum: 2,
     note: "Polo e felpe reggono il prezzo anche molto usati.",
     source: "Mercatini, Thrift shops", prezzo: "20-60€",
     cosaMeglio: ["Polo con logo grande (Big Pony)", "Felpe con zip e logo", "Camicie Oxford button-down", "Maglioni in cotone/lana con logo"],
@@ -47,9 +56,11 @@ export const BRANDS = [
     stagione: "Tutto l'anno, polo in primavera-estate",
     consiglio: "Cerca nei mercatini dell'usato — si trova a 5-10€. Le polo Big Pony si vendono a 30-40€. I maglioni invernali con logo cavallo a 25-50€. Facile da trovare, facile da vendere.",
     difficolta: "Bassa — perfetto per iniziare",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Rischio basso — i falsi sono rari e facili da riconoscere", "Controlla che il cavallino sia ricamato bene (non stampato)", "Etichetta interna con paese di produzione"],
   },
   {
-    name: "Burberry", domanda: 4, velocita: "3-7 giorni", margine: 90,
+    name: "Burberry", domanda: 4, velocita: "3-7 giorni", margine: 90, difficoltaNum: 3,
     note: "Sciarpe e trench iconici. Il vintage nova check è ricercatissimo.",
     source: "Thrift shops, Privati", prezzo: "30-200€",
     cosaMeglio: ["Sciarpe in cashmere con pattern nova check", "Trench classico beige", "Camicie con pattern check", "Borse vintage"],
@@ -59,9 +70,11 @@ export const BRANDS = [
     stagione: "Autunno-Inverno per sciarpe e trench",
     consiglio: "Le sciarpe in cashmere sono oro puro: le compri a 20-40€ nei mercatini e le rivendi a 60-100€. Il trench Burberry vintage è un pezzo iconico che vale 150-300€.",
     difficolta: "Media — occhio ai falsi",
+    rischioFalsi: "alto",
+    controlloFalsi: ["Etichetta: 'Burberry' (nuovi) o 'Burberrys' (vintage pre-1999) — mai entrambi", "Sciarpe: cashmere vero è morbidissimo, le frange sono cucite non incollate", "Pattern nova check: le linee devono essere simmetriche e allineate alle cuciture", "Trench: controlla i bottoni con incisione 'Burberry' e la fodera interna"],
   },
   {
-    name: "The North Face", domanda: 5, velocita: "1-3 giorni", margine: 88,
+    name: "The North Face", domanda: 5, velocita: "1-3 giorni", margine: 88, difficoltaNum: 2,
     note: "Giacche e gilet a prezzi alti. Stagionalità importante.",
     source: "Mercatini, Vinted stessa", prezzo: "25-80€",
     cosaMeglio: ["Piumini Nuptse (il re del resell)", "Gilet imbottiti", "Giacche in Gore-Tex", "Felpe con logo"],
@@ -71,9 +84,11 @@ export const BRANDS = [
     stagione: "Settembre-Febbraio — pubblica prima che faccia freddo",
     consiglio: "Il Nuptse è il prodotto più rivenduto su Vinted Italia. Compralo d'estate quando costa meno e vendilo a ottobre. Le taglie S e M donna vanno fortissimo.",
     difficolta: "Bassa — facile trovare e vendere",
+    rischioFalsi: "medio",
+    controlloFalsi: ["Controlla la zip YKK (deve avere incisione 'YKK')", "Etichetta olografica sul collo (modelli recenti)", "Il logo ricamato deve essere pulito, senza fili fuori posto", "Verifica il codice stile sull'etichetta interna"],
   },
   {
-    name: "Nike", domanda: 5, velocita: "1-3 giorni", margine: 85,
+    name: "Nike", domanda: 5, velocita: "1-3 giorni", margine: 85, difficoltaNum: 1,
     note: "Felpe e tute spariscono in 1-3 giorni.",
     source: "Primark, Mercatini, FB Marketplace", prezzo: "15-45€",
     cosaMeglio: ["Felpe con swoosh centrale", "Tute Tech Fleece", "Giacche a vento vintage", "Air Force 1 e Dunk"],
@@ -83,9 +98,11 @@ export const BRANDS = [
     stagione: "Tutto l'anno, felpe e tute in autunno-inverno",
     consiglio: "Nike è il brand più facile per iniziare. Le felpe vintage con swoosh grande si trovano a 10-15€ e si vendono a 30-40€. Le Tech Fleece sono richiestissime. Foto su sfondo neutro fanno la differenza.",
     difficolta: "Bassissima — il miglior brand per principianti",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Rischio basso per abbigliamento (più alto per scarpe)", "Scarpe: controlla codice stile sulla linguetta e sulla scatola (devono corrispondere)", "Etichetta interna con codice a barre e taglie multiple"],
   },
   {
-    name: "Carhartt", domanda: 4, velocita: "3-7 giorni", margine: 85,
+    name: "Carhartt", domanda: 4, velocita: "3-7 giorni", margine: 85, difficoltaNum: 3,
     note: "Nicchia workwear in forte crescita.",
     source: "Mercatini, Import USA", prezzo: "20-50€",
     cosaMeglio: ["Giacche Detroit", "Felpe con logo", "Beanie (cappellini invernali)", "T-shirt con tasca"],
@@ -95,9 +112,11 @@ export const BRANDS = [
     stagione: "Autunno-Inverno per giacche, tutto l'anno per beanie",
     consiglio: "Carhartt WIP è la linea fashion che vale di più. La giacca Detroit vintage è un pezzo cult. Cerca nei mercatini americani online — i prezzi sono più bassi che in Italia.",
     difficolta: "Media — difficile da trovare a poco",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Rischio basso — pochi falsi in circolazione", "Distingui Carhartt (workwear) da Carhartt WIP (fashion) — etichette diverse", "WIP ha etichetta quadrata con logo, Carhartt originale ha etichetta rettangolare"],
   },
   {
-    name: "Adidas", domanda: 5, velocita: "1-3 giorni", margine: 80,
+    name: "Adidas", domanda: 5, velocita: "1-3 giorni", margine: 80, difficoltaNum: 1,
     note: "Trefoil e 3 stripes sempre richiesti.",
     source: "Mercatini, Outlet", prezzo: "12-35€",
     cosaMeglio: ["Felpe con logo Trefoil vintage", "Tute con 3 stripes", "Giacche Firebird", "Samba e Gazelle (scarpe)"],
@@ -107,9 +126,11 @@ export const BRANDS = [
     stagione: "Tutto l'anno",
     consiglio: "Il vintage Adidas anni 80-90 vale molto di più del nuovo. Le Samba sono le scarpe più cercate del momento. Le tute con zip e 3 stripes laterali si vendono sempre.",
     difficolta: "Bassa — facile da trovare ovunque",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Rischio basso per abbigliamento", "Scarpe: controlla il codice articolo sulla linguetta interna", "Il logo Trefoil deve essere ricamato in modo pulito"],
   },
   {
-    name: "New Balance", domanda: 4, velocita: "3-7 giorni", margine: 78,
+    name: "New Balance", domanda: 4, velocita: "3-7 giorni", margine: 78, difficoltaNum: 3,
     note: "Modelli 550 e 530 molto richiesti.",
     source: "Outlet, Saldi online", prezzo: "40-90€",
     cosaMeglio: ["550 (bianche/verdi/blu)", "530 (silver)", "990 Made in USA (fascia alta)", "2002R"],
@@ -119,9 +140,11 @@ export const BRANDS = [
     stagione: "Tutto l'anno",
     consiglio: "Le 550 sono diventate mainstream grazie a Aimé Leon Dore. Comprale in outlet quando sono in saldo e rivendi al prezzo pieno. I colori neutri (bianco, grigio, verde) si vendono più veloci.",
     difficolta: "Media — margine più basso sulle taglie comuni",
+    rischioFalsi: "medio",
+    controlloFalsi: ["Controlla il codice modello sulla linguetta e sulla scatola", "La N laterale deve essere cucita, non incollata", "Modelli Made in USA/UK: verifica il paese sulla linguetta"],
   },
   {
-    name: "Levi's", domanda: 4, velocita: "3-7 giorni", margine: 78,
+    name: "Levi's", domanda: 4, velocita: "3-7 giorni", margine: 78, difficoltaNum: 2,
     note: "Jeans 501 e vintage anni 80/90 valgono molto.",
     source: "Thrift shops, Mercatini", prezzo: "10-35€",
     cosaMeglio: ["501 vintage (etichetta rossa piccola)", "Giacche trucker in denim", "Jeans 505 e 550 relaxed", "Modelli Made in USA"],
@@ -131,9 +154,11 @@ export const BRANDS = [
     stagione: "Tutto l'anno",
     consiglio: "I 501 vintage con etichetta piccola rossa si trovano nei mercatini a 8-15€ e si vendono a 35-60€. Le giacche trucker oversize vanno fortissimo. Metti sempre le misure esatte in cm.",
     difficolta: "Bassa — si trovano facilmente",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Rischio bassissimo — i falsi Levi's sono rari", "Per il vintage: l'etichetta rossa piccola (con la 'E' minuscola) indica pezzi post-1971", "Controlla le cuciture arancioni a doppio filo (caratteristica Levi's)"],
   },
   {
-    name: "Tommy Hilfiger", domanda: 4, velocita: "3-7 giorni", margine: 75,
+    name: "Tommy Hilfiger", domanda: 4, velocita: "3-7 giorni", margine: 75, difficoltaNum: 2,
     note: "Buona domanda costante, soprattutto uomo.",
     source: "Outlet, FB Marketplace", prezzo: "15-40€",
     cosaMeglio: ["Felpe con logo grande anni 90", "Polo con bandierina", "Giacche leggere", "Maglioni con logo"],
@@ -143,9 +168,11 @@ export const BRANDS = [
     stagione: "Tutto l'anno, maglioni in inverno",
     consiglio: "Il vintage Tommy anni 90 con logo grande è molto più richiesto del nuovo. Cerca su FB Marketplace — molti privati vendono lotti interi a prezzi bassi.",
     difficolta: "Bassa — domanda costante",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Rischio basso — pochi falsi", "Controlla che la bandierina sia ricamata (non stampata)", "Le etichette interne devono avere codice RN e CA"],
   },
   {
-    name: "Dickies", domanda: 3, velocita: "1-2 settimane", margine: 72,
+    name: "Dickies", domanda: 3, velocita: "1-2 settimane", margine: 72, difficoltaNum: 2,
     note: "Pantaloni cargo e giacche: domanda alta, reperibili a poco.",
     source: "Outlet, Mercatini", prezzo: "8-25€",
     cosaMeglio: ["Pantaloni 874 Original Fit", "Cargo pants", "Giacche da lavoro", "Camicie a maniche corte"],
@@ -155,9 +182,11 @@ export const BRANDS = [
     stagione: "Tutto l'anno",
     consiglio: "I 874 sono un classico dello streetwear. Si trovano nuovi a 15-20€ in outlet e si vendono a 30-40€ su Vinted. Il nero e il beige sono i colori più richiesti.",
     difficolta: "Bassa — facile e sicuro",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Rischio bassissimo — nessuno fa falsi di Dickies", "Controlla solo che l'etichetta sia quella ufficiale"],
   },
   {
-    name: "Zara", domanda: 3, velocita: "3-7 giorni", margine: 70,
+    name: "Zara", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 1,
     note: "Ottimo rapporto costo/velocità.",
     source: "Zara Outlet, Saldi", prezzo: "8-25€",
     cosaMeglio: ["Cappotti strutturati", "Blazer oversize", "Borse (imitano il lusso)", "Pezzi della collezione limitata"],
@@ -167,9 +196,11 @@ export const BRANDS = [
     stagione: "Segui le collezioni — vendi subito dopo l'uscita",
     consiglio: "Il trucco con Zara è comprare durante i saldi al -70% e rivendere come 'nuovo con etichette'. I cappotti invernali comprati a 20€ in saldo si rivendono a 40-50€. Velocità è tutto.",
     difficolta: "Bassissima — perfetto per volume",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Nessun rischio — nessuno contraffà Zara"],
   },
   {
-    name: "Mango", domanda: 3, velocita: "1-2 settimane", margine: 60,
+    name: "Mango", domanda: 3, velocita: "1-2 settimane", margine: 60, difficoltaNum: 1,
     note: "Buona rotazione per donna. Meno margine ma veloce.",
     source: "Outlet, Saldi", prezzo: "5-18€",
     cosaMeglio: ["Cappotti e giacche", "Borse in ecopelle", "Vestiti eleganti", "Blazer"],
@@ -179,9 +210,11 @@ export const BRANDS = [
     stagione: "Autunno-Inverno per cappotti, Primavera per vestiti",
     consiglio: "Mango funziona bene per l'abbigliamento donna. Il margine è più basso ma la rotazione è veloce. Compra in saldo, rivendi come 'nuovo'. Abbinalo a Zara per fare volume.",
     difficolta: "Bassissima",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Nessun rischio — nessuno contraffà Mango"],
   },
   {
-    name: "H&M", domanda: 2, velocita: "2-4 settimane", margine: 50,
+    name: "H&M", domanda: 2, velocita: "2-4 settimane", margine: 50, difficoltaNum: 1,
     note: "Conviene solo con prezzi bassissimi e lotti.",
     source: "Saldi, Stock", prezzo: "3-10€",
     cosaMeglio: ["Collezioni premium/Studio", "Collaborazioni designer (H&M x Mugler, ecc.)", "Cappotti invernali", "Pezzi con etichetta ancora attaccata"],
@@ -191,8 +224,23 @@ export const BRANDS = [
     stagione: "Solo saldi e collaborazioni",
     consiglio: "H&M funziona SOLO se compri a 2-5€ durante i mega saldi e rivendi con etichetta come nuovo. Le collaborazioni con designer (H&M x Versace, ecc.) hanno margini alti. Per il resto, evita.",
     difficolta: "Bassa ma margine minimo",
+    rischioFalsi: "basso",
+    controlloFalsi: ["Nessun rischio — nessuno contraffà H&M"],
   },
 ];
+
+/* ─── Score calculation ─── */
+// 40% margine (0-100 → 0-10) + 30% domanda (1-5 → 2-10) + 20% velocità + 10% facilità
+export function calcScore(b) {
+  const margineScore = (b.margine / 100) * 10;
+  const domandaScore = b.domanda * 2;
+  const velMap = { "1-3 giorni": 10, "3-7 giorni": 7, "1-2 settimane": 4, "2-4 settimane": 2 };
+  const velScore = velMap[b.velocita] || 5;
+  const diffNum = b.difficoltaNum || 2;
+  const facilitaScore = ((5 - diffNum) / 4) * 10;
+  const raw = margineScore * 0.4 + domandaScore * 0.3 + velScore * 0.2 + facilitaScore * 0.1;
+  return Math.min(10, Math.round(raw * 10) / 10);
+}
 
 export const TIPS = [
   { num: "01", title: "Arbitraggio tra piattaforme", desc: "Compra su FB Marketplace da privati (prezzi bassi, zero commissioni) e rivendi su Vinted dove il pubblico è più ampio.", icon: "🔄" },

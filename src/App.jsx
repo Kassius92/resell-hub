@@ -3,14 +3,15 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from "recharts";
-import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, Lightbulb, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone } from "lucide-react";
+import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, Lightbulb, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil } from "lucide-react";
 import {
-  BRANDS, TIPS, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS
+  BRANDS, TIPS, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore
 } from "./data";
 
 /* ─── STORAGE ─── */
 const STORAGE_KEY = "resell-hub-data";
 const ARCHIVE_KEY = "resell-hub-archive";
+const CUSTOM_BRANDS_KEY = "resell-hub-custom-brands";
 
 function loadData(key) {
   try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; }
@@ -93,8 +94,12 @@ export default function App() {
   const [filter, setFilter] = useState("tutti");
   const [invSort, setInvSort] = useState("recente");
   const [brandSearch, setBrandSearch] = useState("");
-  const [brandSort, setBrandSort] = useState("margine");
+  const [brandSort, setBrandSort] = useState("score");
   const [selectedBrand, setSelectedBrand] = useState(null);
+  const [customBrands, setCustomBrands] = useState(() => loadData(CUSTOM_BRANDS_KEY));
+  const [showAddBrand, setShowAddBrand] = useState(false);
+  const [editingBrand, setEditingBrand] = useState(null);
+  const [brandForm, setBrandForm] = useState({ name: "", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 2, note: "", source: "", prezzo: "", prezzoVendita: "", consiglio: "" });
   const [showReset, setShowReset] = useState(false);
   const [sellModal, setSellModal] = useState(null);
   const [sellPrice, setSellPrice] = useState("");
@@ -115,9 +120,10 @@ export default function App() {
     saveTimer.current = setTimeout(() => {
       saveData(STORAGE_KEY, articles);
       saveData(ARCHIVE_KEY, archive);
+      saveData(CUSTOM_BRANDS_KEY, customBrands);
     }, 300);
     return () => clearTimeout(saveTimer.current);
-  }, [articles, archive]);
+  }, [articles, archive, customBrands]);
 
   // PWA install prompt capture
   useEffect(() => {
@@ -192,8 +198,42 @@ export default function App() {
   }
 
   function handleReset() {
-    localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(ARCHIVE_KEY);
-    setArticles([]); setArchive([]); setShowReset(false); showToast("Tutto azzerato");
+    localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(ARCHIVE_KEY); localStorage.removeItem(CUSTOM_BRANDS_KEY);
+    setArticles([]); setArchive([]); setCustomBrands([]); setShowReset(false); showToast("Tutto azzerato");
+  }
+
+  function saveCustomBrand() {
+    if (!brandForm.name.trim()) { showToast("Inserisci il nome del brand!", "err"); return; }
+    const b = {
+      ...brandForm, name: brandForm.name.trim(), custom: true,
+      id: editingBrand?.id || genId(),
+      margine: parseInt(brandForm.margine) || 70,
+      domanda: parseInt(brandForm.domanda) || 3,
+      difficoltaNum: parseInt(brandForm.difficoltaNum) || 2,
+      cosaMeglio: [], cosaEvitare: [],
+      taglieTop: [], stagione: "", difficolta: "",
+      rischioFalsi: "basso", controlloFalsi: ["Nessuna info — aggiungi le tue note"],
+    };
+    if (editingBrand) {
+      setCustomBrands((p) => p.map((x) => x.id === editingBrand.id ? b : x));
+      if (selectedBrand?.id === editingBrand.id) setSelectedBrand(b);
+    } else {
+      setCustomBrands((p) => [...p, b]);
+    }
+    setShowAddBrand(false); setEditingBrand(null);
+    setBrandForm({ name: "", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 2, note: "", source: "", prezzo: "", prezzoVendita: "", consiglio: "" });
+    showToast(editingBrand ? "Brand aggiornato!" : "Brand aggiunto!");
+  }
+
+  function deleteCustomBrand(id) {
+    setCustomBrands((p) => p.filter((b) => b.id !== id));
+    setSelectedBrand(null);
+    showToast("Brand eliminato", "err");
+  }
+
+  function startEditBrand(b) {
+    setBrandForm({ name: b.name, domanda: b.domanda, velocita: b.velocita, margine: b.margine, difficoltaNum: b.difficoltaNum, note: b.note || "", source: b.source || "", prezzo: b.prezzo || "", prezzoVendita: b.prezzoVendita || "", consiglio: b.consiglio || "" });
+    setEditingBrand(b); setShowAddBrand(true);
   }
 
   function exportCSV() {
@@ -256,8 +296,12 @@ export default function App() {
   });
 
   // Sorted brands
-  const sortedBrands = [...BRANDS].filter((b) => !brandSearch || b.name.toLowerCase().includes(brandSearch.toLowerCase()))
+  // All brands (built-in + custom)
+  const allBrands = [...BRANDS, ...customBrands];
+
+  const sortedBrands = [...allBrands].filter((b) => !brandSearch || b.name.toLowerCase().includes(brandSearch.toLowerCase()))
     .sort((a, b) => {
+      if (brandSort === "score") return calcScore(b) - calcScore(a);
       if (brandSort === "margine") return b.margine - a.margine;
       if (brandSort === "domanda") return b.domanda - a.domanda;
       if (brandSort === "velocita") {
@@ -466,16 +510,19 @@ export default function App() {
                 <input value={brandSearch} onChange={(e) => setBrandSearch(e.target.value)} placeholder="Cerca brand..." style={{ ...S.input, paddingLeft: 34 }} />
               </div>
               <SortSelect value={brandSort} onChange={setBrandSort} options={[
-                { value: "margine", label: "Margine ↑" }, { value: "domanda", label: "Domanda ↑" },
+                { value: "score", label: "Punteggio ↑" }, { value: "margine", label: "Margine ↑" }, { value: "domanda", label: "Domanda ↑" },
                 { value: "velocita", label: "Più veloci" }, { value: "nome", label: "Nome A-Z" },
               ]} />
             </div>
 
             {sortedBrands.map((b, i) => (
-              <div key={b.name} onClick={() => setSelectedBrand(b)} style={{ ...S.brandRow, cursor: "pointer", animation: `slideUp 0.25s ease ${i * 0.03}s forwards`, opacity: 0 }}>
+              <div key={b.custom ? b.id : b.name} onClick={() => setSelectedBrand(b)} style={{ ...S.brandRow, cursor: "pointer", animation: `slideUp 0.25s ease ${i * 0.03}s forwards`, opacity: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 15, fontWeight: 500, color: "var(--text)", marginBottom: 4 }}>{b.name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 15, fontWeight: 500, color: "var(--text)" }}>{b.name}</span>
+                      {b.custom && <span style={{ fontSize: 8, padding: "1px 6px", borderRadius: 3, background: "rgba(212,245,94,0.15)", color: "var(--accent)", border: "1px solid rgba(212,245,94,0.2)", letterSpacing: 1, textTransform: "uppercase" }}>Tuo</span>}
+                    </div>
                     <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <DemandDots level={b.domanda} />
@@ -484,96 +531,235 @@ export default function App() {
                       <span style={{ fontSize: 10, color: "var(--dim)" }}>{b.prezzo}</span>
                     </div>
                   </div>
-                  <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 20, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{b.margine}%</span>
+                  <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{calcScore(b)}</div>
+                      <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>/ 10</div>
+                    </div>
                     <ChevronRight size={16} style={{ color: "var(--dim)" }} />
                   </div>
                 </div>
               </div>
             ))}
+
+            {/* Add custom brand button */}
+            <button onClick={() => { setShowAddBrand(true); setEditingBrand(null); setBrandForm({ name: "", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 2, note: "", source: "", prezzo: "", prezzoVendita: "", consiglio: "" }); }} style={{ ...S.brandRow, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--accent)", border: "1px dashed var(--border)", opacity: 1 }}>
+              <PlusCircle size={16} /> <span style={{ fontSize: 12 }}>Aggiungi un tuo brand</span>
+            </button>
           </div>
         )}
 
         {/* ═══ BRAND DETAIL PAGE ═══ */}
-        {tab === "brands" && selectedBrand && (
+        {tab === "brands" && selectedBrand && (() => {
+          const b = selectedBrand;
+          const score = calcScore(b);
+          const brandName = b.name.toLowerCase();
+          const myItems = articles.filter((a) => a.brand.toLowerCase() === brandName);
+          const mySold = [...myItems.filter((a) => a.venduto), ...archive.filter((a) => a.brand.toLowerCase() === brandName)];
+          const myProfit = mySold.reduce((s, a) => s + getMargin(a), 0);
+          const myAvgMargin = mySold.length > 0 ? (myProfit / mySold.length).toFixed(2) : null;
+          const falsiColor = b.rischioFalsi === "alto" ? "var(--red)" : b.rischioFalsi === "medio" ? "var(--yellow)" : "var(--green)";
+
+          return (
           <div style={{ animation: "fadeIn 0.2s ease" }}>
-            {/* Back button */}
             <button onClick={() => setSelectedBrand(null)} style={S.backBtn}>
               <ArrowLeft size={16} /> Tutti i brand
             </button>
 
-            {/* Header */}
-            <div style={{ marginBottom: 20 }}>
-              <h2 style={{ fontSize: 28, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif", marginBottom: 4 }}>{selectedBrand.name}</h2>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>{selectedBrand.note}</div>
+            {/* Header + Vinted link */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <h2 style={{ fontSize: 28, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{b.name}</h2>
+                  {b.custom && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: "rgba(212,245,94,0.15)", color: "var(--accent)", letterSpacing: 1, textTransform: "uppercase" }}>Tuo</span>}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{b.note}</div>
+              </div>
             </div>
 
-            {/* Key metrics */}
+            {/* Vinted link */}
+            <a href={`https://www.vinted.it/catalog?search_text=${encodeURIComponent(b.name)}`} target="_blank" rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--accent)", fontSize: 12, textDecoration: "none", marginBottom: 16, fontFamily: "'DM Mono', monospace" }}>
+              <ExternalLink size={14} /> Cerca "{b.name}" su Vinted
+            </a>
+
+            {/* Score + Key metrics */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+              <div style={{ ...S.detailMetric, background: "rgba(212,245,94,0.06)", borderColor: "rgba(212,245,94,0.15)" }}>
+                <div style={S.detailMetricLabel}>Punteggio <InfoTip text="Voto da 1 a 10 basato su: margine (40%), domanda (30%), velocità (20%), facilità (10%)" /></div>
+                <div style={{ fontSize: 32, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{score}</div>
+                <div style={{ fontSize: 9, color: "var(--dim)" }}>/ 10</div>
+              </div>
+              <div style={S.detailMetric}>
+                <div style={S.detailMetricLabel}>Margine</div>
+                <div style={{ fontSize: 24, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{b.margine}%</div>
+              </div>
+              <div style={S.detailMetric}>
+                <div style={S.detailMetricLabel}>Vendita</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: b.velocita === "1-3 giorni" ? "var(--green)" : b.velocita === "3-7 giorni" ? "var(--yellow)" : "var(--red)", marginTop: 2 }}>{b.velocita}</div>
+              </div>
+            </div>
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
               <div style={S.detailMetric}>
-                <div style={S.detailMetricLabel}>Margine tipico</div>
-                <div style={{ fontSize: 28, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{selectedBrand.margine}%</div>
-              </div>
-              <div style={S.detailMetric}>
-                <div style={S.detailMetricLabel}>Tempo vendita</div>
-                <div style={{ fontSize: 18, fontWeight: 500, color: selectedBrand.velocita === "1-3 giorni" ? "var(--green)" : selectedBrand.velocita === "3-7 giorni" ? "var(--yellow)" : "var(--red)" }}>{selectedBrand.velocita}</div>
-              </div>
-              <div style={S.detailMetric}>
                 <div style={S.detailMetricLabel}>Domanda</div>
-                <div style={{ marginTop: 4 }}><DemandDots level={selectedBrand.domanda} /></div>
+                <div style={{ marginTop: 4 }}><DemandDots level={b.domanda} /></div>
               </div>
               <div style={S.detailMetric}>
                 <div style={S.detailMetricLabel}>Difficoltà</div>
-                <div style={{ fontSize: 12, color: "var(--text2)" }}>{selectedBrand.difficolta}</div>
+                <div style={{ fontSize: 12, color: "var(--text2)" }}>{b.difficolta || `Livello ${b.difficoltaNum}/4`}</div>
               </div>
             </div>
 
             {/* Prices */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-              <div style={S.detailMetric}>
-                <div style={S.detailMetricLabel}>💰 Compri a</div>
-                <div style={{ fontSize: 16, fontWeight: 500, color: "var(--red)" }}>{selectedBrand.prezzo}</div>
+            {(b.prezzo || b.prezzoVendita) && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+                {b.prezzo && <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>💰 Compri a</div>
+                  <div style={{ fontSize: 16, fontWeight: 500, color: "var(--red)" }}>{b.prezzo}</div>
+                </div>}
+                {b.prezzoVendita && <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>💸 Rivendi a</div>
+                  <div style={{ fontSize: 16, fontWeight: 500, color: "var(--green)" }}>{b.prezzoVendita}</div>
+                </div>}
               </div>
-              <div style={S.detailMetric}>
-                <div style={S.detailMetricLabel}>💸 Rivendi a</div>
-                <div style={{ fontSize: 16, fontWeight: 500, color: "var(--green)" }}>{selectedBrand.prezzoVendita}</div>
-              </div>
+            )}
+
+            {/* 📊 Storico personale */}
+            <div style={{ ...S.card, marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: "#60a5fa", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>📊 I tuoi numeri</div>
+              {mySold.length === 0 && myItems.length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessun dato ancora — aggiungi articoli di {b.name} per vedere le tue stats.</div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 20, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{myItems.filter((a) => !a.venduto).length}</div>
+                    <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>In vendita</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 20, fontWeight: 500, color: "var(--green)", fontFamily: "'Playfair Display', serif" }}>{mySold.length}</div>
+                    <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>Venduti</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 20, fontWeight: 500, color: myProfit >= 0 ? "var(--green)" : "var(--red)", fontFamily: "'Playfair Display', serif" }}>{formatEur(myProfit)}</div>
+                    <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>Guadagno totale</div>
+                  </div>
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: 20, fontWeight: 500, color: "var(--text2)", fontFamily: "'Playfair Display', serif" }}>{myAvgMargin ? myAvgMargin + "€" : "—"}</div>
+                    <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>Margine medio</div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Consiglio principale */}
-            <div style={{ ...S.card, background: "rgba(212,245,94,0.06)", borderColor: "rgba(212,245,94,0.15)", marginBottom: 16 }}>
-              <div style={{ fontSize: 10, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>💡 Consiglio chiave</div>
-              <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.7 }}>{selectedBrand.consiglio}</div>
-            </div>
+            {/* Consiglio */}
+            {b.consiglio && (
+              <div style={{ ...S.card, background: "rgba(212,245,94,0.06)", borderColor: "rgba(212,245,94,0.15)", marginBottom: 16 }}>
+                <div style={{ fontSize: 10, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>💡 Consiglio chiave</div>
+                <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.7 }}>{b.consiglio}</div>
+              </div>
+            )}
 
             {/* Cosa comprare */}
-            <div style={{ ...S.card, marginBottom: 12 }}>
-              <div style={{ fontSize: 10, color: "var(--green)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>✅ Cosa comprare</div>
-              {selectedBrand.cosaMeglio.map((item, i) => (
-                <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-                  <span style={{ color: "var(--green)", fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
-                  <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
-                </div>
-              ))}
-            </div>
+            {b.cosaMeglio?.length > 0 && (
+              <div style={{ ...S.card, marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: "var(--green)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>✅ Cosa comprare</div>
+                {b.cosaMeglio.map((item, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+                    <span style={{ color: "var(--green)", fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
+                    <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Cosa evitare */}
-            <div style={{ ...S.card, marginBottom: 12 }}>
-              <div style={{ fontSize: 10, color: "var(--red)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>⛔ Cosa evitare</div>
-              {selectedBrand.cosaEvitare.map((item, i) => (
-                <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-                  <span style={{ color: "var(--red)", fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
-                  <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
+            {b.cosaEvitare?.length > 0 && (
+              <div style={{ ...S.card, marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: "var(--red)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>⛔ Cosa evitare</div>
+                {b.cosaEvitare.map((item, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+                    <span style={{ color: "var(--red)", fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
+                    <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ⚠️ Rischio falsi */}
+            {b.rischioFalsi && (
+              <div style={{ ...S.card, marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: falsiColor, textTransform: "uppercase", letterSpacing: 1 }}>⚠️ Rischio falsi</div>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: falsiColor, padding: "2px 8px", borderRadius: 4, background: b.rischioFalsi === "alto" ? "#301818" : b.rischioFalsi === "medio" ? "#302a18" : "#183018", border: `1px solid ${falsiColor}33` }}>
+                    {b.rischioFalsi.charAt(0).toUpperCase() + b.rischioFalsi.slice(1)}
+                  </span>
                 </div>
-              ))}
-            </div>
+                {b.controlloFalsi?.map((item, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+                    <span style={{ color: falsiColor, fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
+                    <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Info pratiche */}
-            <div style={{ ...S.card, marginBottom: 12 }}>
-              <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>📋 Info pratiche</div>
-              <DetailRow label="Taglie più richieste" value={selectedBrand.taglieTop.join(", ")} />
-              <DetailRow label="Dove trovarlo" value={selectedBrand.source} />
-              <DetailRow label="Stagione migliore" value={selectedBrand.stagione} />
+            {(b.taglieTop?.length > 0 || b.source || b.stagione) && (
+              <div style={{ ...S.card, marginBottom: 12 }}>
+                <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>📋 Info pratiche</div>
+                {b.taglieTop?.length > 0 && <DetailRow label="Taglie più richieste" value={b.taglieTop.join(", ")} />}
+                {b.source && <DetailRow label="Dove trovarlo" value={b.source} />}
+                {b.stagione && <DetailRow label="Stagione migliore" value={b.stagione} />}
+              </div>
+            )}
+
+            {/* Edit/Delete for custom brands */}
+            {b.custom && (
+              <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                <button onClick={() => startEditBrand(b)} style={{ ...S.addBtn, background: "var(--surface)", color: "var(--accent)", border: "1px solid var(--border)", flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <Pencil size={14} /> Modifica
+                </button>
+                <button onClick={() => deleteCustomBrand(b.id)} style={{ ...S.addBtn, background: "#301818", color: "var(--red)", border: "1px solid #f8717133", flex: 1 }}>
+                  Elimina brand
+                </button>
+              </div>
+            )}
+          </div>
+          );
+        })()}
+
+        {/* ═══ ADD/EDIT BRAND MODAL ═══ */}
+        {showAddBrand && (
+          <div style={S.overlay} onClick={() => { setShowAddBrand(false); setEditingBrand(null); }}>
+            <div style={{ ...S.modal, textAlign: "left", maxWidth: 420, maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text)", marginBottom: 14 }}>{editingBrand ? "Modifica brand" : "Aggiungi brand"}</div>
+              <Field label="Nome brand" required>
+                <input value={brandForm.name} onChange={(e) => setBrandForm((p) => ({...p, name: e.target.value}))} placeholder="es. Stüssy" style={S.input} />
+              </Field>
+              <div style={S.formRow}>
+                <Field label="Domanda (1-5)"><input type="number" min="1" max="5" value={brandForm.domanda} onChange={(e) => setBrandForm((p) => ({...p, domanda: e.target.value}))} style={S.input} /></Field>
+                <Field label="Margine %"><input type="number" min="0" max="100" value={brandForm.margine} onChange={(e) => setBrandForm((p) => ({...p, margine: e.target.value}))} style={S.input} /></Field>
+              </div>
+              <div style={S.formRow}>
+                <Field label="Velocità vendita">
+                  <select value={brandForm.velocita} onChange={(e) => setBrandForm((p) => ({...p, velocita: e.target.value}))} style={S.input}>
+                    {["1-3 giorni", "3-7 giorni", "1-2 settimane", "2-4 settimane"].map((v) => <option key={v}>{v}</option>)}
+                  </select>
+                </Field>
+                <Field label="Difficoltà (1-4)"><input type="number" min="1" max="4" value={brandForm.difficoltaNum} onChange={(e) => setBrandForm((p) => ({...p, difficoltaNum: e.target.value}))} style={S.input} /></Field>
+              </div>
+              <div style={S.formRow}>
+                <Field label="Prezzo acquisto"><input value={brandForm.prezzo} onChange={(e) => setBrandForm((p) => ({...p, prezzo: e.target.value}))} placeholder="10-30€" style={S.input} /></Field>
+                <Field label="Prezzo vendita"><input value={brandForm.prezzoVendita} onChange={(e) => setBrandForm((p) => ({...p, prezzoVendita: e.target.value}))} placeholder="25-60€" style={S.input} /></Field>
+              </div>
+              <Field label="Dove trovarlo"><input value={brandForm.source} onChange={(e) => setBrandForm((p) => ({...p, source: e.target.value}))} placeholder="Mercatini, Outlet..." style={S.input} /></Field>
+              <Field label="Note"><textarea value={brandForm.note} onChange={(e) => setBrandForm((p) => ({...p, note: e.target.value}))} placeholder="Info generali..." rows={2} style={{ ...S.input, resize: "vertical" }} /></Field>
+              <Field label="Consiglio"><textarea value={brandForm.consiglio} onChange={(e) => setBrandForm((p) => ({...p, consiglio: e.target.value}))} placeholder="Il tuo consiglio principale..." rows={2} style={{ ...S.input, resize: "vertical" }} /></Field>
+              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                <button onClick={() => { setShowAddBrand(false); setEditingBrand(null); }} style={S.modalCancel}>Annulla</button>
+                <button onClick={saveCustomBrand} style={S.modalConfirm}>{editingBrand ? "Salva" : "Aggiungi"}</button>
+              </div>
             </div>
           </div>
         )}

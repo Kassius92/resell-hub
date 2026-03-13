@@ -1,6 +1,6 @@
 {
   "name": "resell-hub",
-  "version": "2.0.0",
+  "version": "3.3.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,10 +15,7 @@
     "recharts": "^2.12.7"
   },
   "devDependencies": {
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.2",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite": "^5.4.2"
   }
 }

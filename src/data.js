@@ -1006,7 +1006,7 @@ export const GUIDA = [
 ];
 
 export const CATEGORIE = ["Abbigliamento", "Scarpe", "Accessori", "Borse", "Altro"];
-export const FONTI = ["Primark", "Sinsay", "Zara", "H&M", "FB Marketplace", "Mercatino", "Thrift Shop", "Outlet", "Vinted", "Altro"];
+export const FONTI = ["FB Marketplace", "Mercatino", "Thrift Shop", "Humana", "Outlet", "Vinted", "Wallapop", "Subito", "Privato", "Stock ingrosso", "Altro"];
 export const TAGLIE = ["XS", "S", "M", "L", "XL", "XXL", "Unica", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45"];
 export const CONDIZIONI = ["Nuovo con etichette", "Nuovo senza etichette", "Ottime condizioni", "Buone condizioni", "Discrete condizioni"];
 export const GENERI = ["Uomo", "Donna", "Unisex"];
@@ -1034,7 +1034,8 @@ export const BRAND_LIST = [
   "Gucci", "Louis Vuitton", "Fendi", "Prada", "Burberry", "Dior", "Versace",
   "Puma", "New Balance", "Converse", "Vans", "Jordan", "Hugo Boss", "Calvin Klein",
   "Napapijri", "Arc'teryx", "Salomon", "Stone Island", "Supreme",
-  "Zara", "H&M", "Mango", "Hermès", "Chanel", "Reebok", "Umbro", "Fila", "Kappa",
+  "Zara", "H&M", "Mango", "Primark", "Sinsay",
+  "Hermès", "Chanel", "Reebok", "Umbro", "Fila", "Kappa",
   "Timberland", "Dr. Martens", "Columbia", "Helly Hansen",
 ];
 
@@ -1290,6 +1291,19 @@ const PRICE_DB = {
     "Vestito": { min: 6, max: 15 }, "Giacca": { min: 8, max: 18 },
     "Cappotto": { min: 12, max: 28 },
     _default: { min: 4, max: 10 },
+  },
+  "Primark": {
+    _tier: "fast-fashion", _demand: 1, _fakeRisk: "basso", _conf: 90,
+    "Giacca": { min: 4, max: 10 }, "Felpa": { min: 3, max: 7 },
+    "Vestito": { min: 3, max: 8 }, "Jeans": { min: 4, max: 9 },
+    "T-shirt": { min: 2, max: 5 }, "Sneakers": { min: 4, max: 10 },
+    _default: { min: 2, max: 6 },
+  },
+  "Sinsay": {
+    _tier: "fast-fashion", _demand: 1, _fakeRisk: "basso", _conf: 90,
+    "Vestito": { min: 3, max: 8 }, "Felpa": { min: 3, max: 7 },
+    "T-shirt": { min: 2, max: 5 }, "Giacca": { min: 4, max: 10 },
+    _default: { min: 2, max: 6 },
   },
   "Hermès": {
     _tier: "luxury", _demand: 5, _fakeRisk: "alto", _conf: 40,

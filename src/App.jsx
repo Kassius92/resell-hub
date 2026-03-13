@@ -575,7 +575,7 @@ export default function App() {
                           <div>
                             <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1 }}>Margine</div>
                             <div style={{ fontSize: 14, fontWeight: 500, color: valutaResult.marginMin >= 0 ? "var(--green)" : "var(--red)" }}>
-                              {valutaResult.marginMin >= 0 ? "+" : ""}{valutaResult.marginMin}€ / {valutaResult.marginMax >= 0 ? "+" : ""}{valutaResult.marginMax}€
+                              {valutaResult.marginMin >= 0 ? "+" : ""}{valutaResult.marginMin.toFixed(2)}€ / {valutaResult.marginMax >= 0 ? "+" : ""}{valutaResult.marginMax.toFixed(2)}€
                             </div>
                           </div>
                           <div>
@@ -644,7 +644,7 @@ export default function App() {
                       <ExternalLink size={13} />
                     </a>
                     <div style={{ fontSize: 10, color: "var(--dim)", textAlign: "center", marginBottom: 14, lineHeight: 1.4 }}>
-                      Apri il link → filtra per "venduti" → guarda gli ultimi 5-10 prezzi reali
+                      Apri il link → confronta i prezzi degli annunci simili → controlla quanti preferiti hanno
                     </div>
 
                     {/* Add to inventory button */}

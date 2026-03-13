@@ -1445,8 +1445,8 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
 
   /* 6. Margine */
   const costo = parseFloat(costoAcquisto) || 0;
-  const marginMin = min - costo;
-  const marginMax = max - costo;
+  const marginMin = Math.round((min - costo) * 100) / 100;
+  const marginMax = Math.round((max - costo) * 100) / 100;
   const marginPctMin = costo > 0 ? Math.round((marginMin / costo) * 100) : null;
   const marginPctMax = costo > 0 ? Math.round((marginMax / costo) * 100) : null;
 
@@ -1509,7 +1509,7 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
   /* 9. Keyword per ricerca Vinted */
   const searchParts = [brand, tipo, dettagli].filter(Boolean).map(s => s.trim()).filter(s => s.length > 0);
   const vintedQuery = searchParts.join(" ");
-  const vintedUrl = `https://www.vinted.it/catalog?search_text=${encodeURIComponent(vintedQuery)}`;
+  const vintedUrl = `https://www.vinted.it/catalog?search_text=${encodeURIComponent(vintedQuery)}&order=price_low_to_high`;
 
   return {
     brand: brandName, tipo, priceMin: min, priceMax: max,

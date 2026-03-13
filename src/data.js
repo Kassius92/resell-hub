@@ -1710,11 +1710,31 @@ export function getRecommendations() {
       if (fakeRisk === "alto") reasons.push("⚠️ Attenzione ai falsi");
       if (tier === "fast-fashion") reasons.push("Margini stretti — serve volume");
 
+      /* Dove comprare per tier */
+      const sourcesByTier = {
+        "streetwear": ["Mercatini dell'usato", "Thrift shop / Humana", "FB Marketplace (svuota armadio)", "Stock all'ingrosso (TAGZ, Vundle, Rivintagekilo)", "Vinted stesso (arbitraggio)"],
+        "classic": ["Mercatini dell'usato", "Thrift shop / Humana", "FB Marketplace", "Outlet brand", "Privati (passaparola)"],
+        "luxury": ["Privati con ricevuta", "Vintage shop specializzati", "Vestiaire Collective", "Aste (Catawiki)", "Mai dai mercatini senza autenticazione"],
+        "outdoor": ["Mercatini dell'usato", "Humana", "FB Marketplace", "Outlet sport", "Svuota-cantine"],
+        "fast-fashion": ["FB Marketplace (lotti svuota armadio)", "Mercatini a peso/chilo", "Non comprare singoli pezzi — solo lotti"],
+        "unknown": ["Mercatini", "FB Marketplace", "Thrift shop"],
+      };
+      const tipsByTier = {
+        "streetwear": ["Controlla che il logo sia nitido e le cuciture dritte", "I pezzi vintage anni 90 valgono di più", "Cerca i modelli con logo grande — si vendono più velocemente", "Le taglie M e L uomo sono le più richieste"],
+        "classic": ["Le polo con logo piccolo ricamato valgono di più delle stampe", "Controlla colletto e polsini — sono i primi punti di usura", "I capi con etichetta ancora leggibile valgono di più"],
+        "luxury": ["MAI comprare senza verificare l'autenticità", "Chiedi sempre foto del serial number prima di pagare", "Gli accessori (cinture, borse) hanno margini più alti dei vestiti", "Dustbag e box originali aumentano il valore del 20-30%"],
+        "outdoor": ["Le giacche Gore-Tex vintage sono molto ricercate (trend gorpcore)", "Controlla che cerniere e velcro funzionino", "I pile Patagonia e TNF si vendono tutto l'anno"],
+        "fast-fashion": ["Conviene solo in bundle (3+ pezzi)", "Capi nuovi con etichetta si vendono meglio", "Non investire più di 2-3€ a pezzo", "Meglio Zara e Mango che Primark — margini un po' più alti"],
+        "unknown": ["Fai ricerca su Vinted prima di comprare", "Parti con un budget basso per testare"],
+      };
+
       recs.push({
         brand: brandName, tipo, score: Math.round(score * 10) / 10,
         priceMin: price.min, priceMax: price.max,
         demand, tier, fakeRisk, budget, reasons,
         isHot, isNear, isAllYear,
+        sources: sourcesByTier[tier] || sourcesByTier["unknown"],
+        tips: tipsByTier[tier] || tipsByTier["unknown"],
       });
     }
   }

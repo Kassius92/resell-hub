@@ -178,10 +178,12 @@ export default function App() {
 
   const [valutaForm, setValutaForm] = useState({
     brand: "", tipo: "", genere: "Uomo", taglia: "M",
-    condizione: "Ottime condizioni", costoAcquisto: "", dettagli: "",
+    condizione: "Ottime condizioni", costoAcquisto: "", prezzoVendita: "", dettagli: "",
     fonte: "Mercatino", note: ""
   });
   const [valutaResult, setValutaResult] = useState(null);
+  const [selectedRec, setSelectedRec] = useState(null);
+  const [openAcquistaSections, setOpenAcquistaSections] = useState({"top": true});
 
   function runValutazione() {
     if (!valutaForm.brand.trim()) { showToast("Inserisci il brand!", "err"); return; }
@@ -189,19 +191,28 @@ export default function App() {
     if (!valutaForm.tipo.trim()) { showToast("Inserisci il tipo di capo!", "err"); return; }
     if (!TIPI_CAPO.some(t => t.toLowerCase() === valutaForm.tipo.toLowerCase())) { showToast("Tipo di capo non valido! Seleziona dalla lista.", "err"); return; }
     const result = evaluateItem(valutaForm);
+    /* Se l'utente ha inserito il suo prezzo vendita, ricalcola margini con quello */
+    const userPrice = parseFloat(valutaForm.prezzoVendita);
+    if (userPrice > 0) {
+      const costo = parseFloat(valutaForm.costoAcquisto) || 0;
+      result.userPrice = userPrice;
+      result.userMargin = Math.round((userPrice - costo) * 100) / 100;
+      result.userMarginPct = costo > 0 ? Math.round((result.userMargin / costo) * 100) : null;
+    }
     setValutaResult(result);
   }
 
   function addFromValuta() {
     if (!valutaResult) return;
     const nome = [valutaForm.brand, valutaForm.tipo, valutaForm.dettagli].filter(Boolean).join(" ").trim();
+    const userPrice = parseFloat(valutaForm.prezzoVendita);
     const newArticle = {
       id: genId(), nome, brand: valutaForm.brand.trim(),
       categoria: ["Sneakers","Scarpe","Stivali","Sandali","Ciabatte/Slides"].includes(valutaForm.tipo) ? "Scarpe" :
                  ["Borsa","Zaino"].includes(valutaForm.tipo) ? "Borse" :
                  ["Cintura","Portafoglio","Sciarpa/Foulard","Cappello/Berretto","Occhiali da sole","Orologio","Gioielli/Bijoux"].includes(valutaForm.tipo) ? "Accessori" : "Abbigliamento",
       costo: parseFloat(valutaForm.costoAcquisto) || 0,
-      prezzo: Math.round((valutaResult.priceMin + valutaResult.priceMax) / 2),
+      prezzo: userPrice > 0 ? userPrice : Math.round((valutaResult.priceMin + valutaResult.priceMax) / 2),
       prezzoVendita: null, fonte: valutaForm.fonte, taglia: valutaForm.taglia,
       condizione: valutaForm.condizione, genere: valutaForm.genere,
       note: valutaForm.note || valutaForm.dettagli, venduto: false,
@@ -592,14 +603,15 @@ export default function App() {
                   </div>
                   <div style={S.formRow}>
                     <Field label="Condizione"><select value={valutaForm.condizione} onChange={(e) => setValutaForm(p => ({...p, condizione: e.target.value}))} style={S.input}>{CONDIZIONI.map(c => <option key={c}>{c}</option>)}</select></Field>
+                    <Field label="Fonte acquisto"><select value={valutaForm.fonte} onChange={(e) => setValutaForm(p => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map(f => <option key={f}>{f}</option>)}</select></Field>
+                  </div>
+                  <div style={S.formRow}>
                     <Field label="Prezzo d'acquisto (€)"><input type="number" value={valutaForm.costoAcquisto} onChange={(e) => setValutaForm(p => ({...p, costoAcquisto: e.target.value}))} placeholder="0.00" step="0.01" min="0" style={S.input} /></Field>
+                    <Field label="Prezzo vendita (€) — opzionale"><input type="number" value={valutaForm.prezzoVendita} onChange={(e) => setValutaForm(p => ({...p, prezzoVendita: e.target.value}))} placeholder="L'app stima se vuoto" step="0.01" min="0" style={S.input} /></Field>
                   </div>
                   <Field label="Modello / dettagli (opzionale)">
                     <input value={valutaForm.dettagli} onChange={(e) => setValutaForm(p => ({...p, dettagli: e.target.value}))} placeholder="es. Nuptse 700, 501 Original, Baguette..." style={S.input} />
                   </Field>
-                  <div style={S.formRow}>
-                    <Field label="Fonte acquisto"><select value={valutaForm.fonte} onChange={(e) => setValutaForm(p => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map(f => <option key={f}>{f}</option>)}</select></Field>
-                  </div>
                   <Field label="Note (opzionale)">
                     <textarea value={valutaForm.note} onChange={(e) => setValutaForm(p => ({...p, note: e.target.value}))} placeholder="es. Etichetta presente, piccolo difetto..." rows={2} style={{ ...S.input, resize: "vertical", minHeight: 48 }} />
                   </Field>
@@ -656,6 +668,31 @@ export default function App() {
                           {valutaResult.marginPctMin}% — {valutaResult.marginPctMax}%
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* User's own price */}
+                  {valutaResult.userPrice > 0 && (
+                    <div style={{ padding: "12px 0", borderTop: "1px solid var(--border)", marginBottom: 6 }}>
+                      <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Il tuo prezzo di vendita</div>
+                      <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                        <div>
+                          <span style={{ fontSize: 22, fontWeight: 600, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{valutaResult.userPrice}€</span>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Margine reale</div>
+                          <div style={{ fontSize: 16, fontWeight: 600, color: valutaResult.userMargin >= 0 ? "var(--green)" : "var(--red)" }}>
+                            {valutaResult.userMargin >= 0 ? "+" : ""}{valutaResult.userMargin.toFixed(2)}€
+                            {valutaResult.userMarginPct !== null && ` (${valutaResult.userMarginPct}%)`}
+                          </div>
+                        </div>
+                      </div>
+                      {valutaResult.userPrice < valutaResult.priceMin && (
+                        <div style={{ fontSize: 10, color: "var(--yellow)", marginTop: 6 }}>⚠️ Il tuo prezzo è sotto la nostra stima minima — potresti vendere a di più</div>
+                      )}
+                      {valutaResult.userPrice > valutaResult.priceMax && (
+                        <div style={{ fontSize: 10, color: "var(--yellow)", marginTop: 6 }}>⚠️ Il tuo prezzo è sopra la nostra stima massima — potrebbe volerci più tempo</div>
+                      )}
                     </div>
                   )}
 
@@ -742,72 +779,168 @@ export default function App() {
         {tab === "acquista" && (() => {
           const rec = getRecommendations();
           const sections = [
-            { key: "top", title: `Top acquisti — ${rec.monthName}`, icon: "🏆", desc: "I pezzi migliori da comprare adesso per margine, domanda e stagionalità.", items: rec.topPicks },
-            { key: "hot", title: "In stagione adesso", icon: "🔥", desc: "Questi tipi di capo si vendono velocemente in questo periodo.", items: rec.hotNow },
+            { key: "top", title: `Top acquisti — ${rec.monthName}`, icon: "🏆", desc: "I pezzi migliori da comprare adesso.", items: rec.topPicks },
+            { key: "hot", title: "In stagione adesso", icon: "🔥", desc: "Si vendono velocemente in questo periodo.", items: rec.hotNow },
             { key: "prepare", title: "Prepara il prossimo mese", icon: "📅", desc: "Compra ora a poco — la domanda sta per salire.", items: rec.prepareNext },
-            { key: "budget", title: "Budget basso (sotto 15€)", icon: "💰", desc: "Pezzi che trovi a poco nei mercatini e rivendita con buon margine.", items: rec.budgetPicks },
-            { key: "margin", title: "Margini più alti", icon: "📈", desc: "I pezzi con il range di prezzo più ampio — potenziale massimo.", items: rec.highMargin },
-            { key: "offseason", title: "Fuori stagione — fai scorta", icon: "🧊", desc: "Ora nessuno li cerca — comprali a poco e vendili quando torna la domanda.", items: rec.offSeason },
+            { key: "budget", title: "Budget basso", icon: "💰", desc: "Pezzi sotto 15€ con buon margine.", items: rec.budgetPicks },
+            { key: "margin", title: "Margini più alti", icon: "📈", desc: "Potenziale massimo.", items: rec.highMargin },
+            { key: "offseason", title: "Fuori stagione — fai scorta", icon: "🧊", desc: "Comprali a poco ora, vendili quando torna la domanda.", items: rec.offSeason },
           ].filter(s => s.items.length > 0);
 
+          /* Detail view for selected recommendation */
+          if (selectedRec) {
+            const r = selectedRec;
+            const tierLabels = { "streetwear": "Streetwear", "classic": "Classico", "luxury": "Luxury", "outdoor": "Outdoor/Sportivo", "fast-fashion": "Fast Fashion", "unknown": "Altro" };
+            return (
+              <div style={{ animation: "fadeIn 0.3s ease" }}>
+                <button onClick={() => setSelectedRec(null)} style={S.backBtn}><ArrowLeft size={14} /> Tutte le raccomandazioni</button>
+
+                {/* Header */}
+                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 20, marginBottom: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 20, fontWeight: 600, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{r.brand}</div>
+                      <div style={{ fontSize: 13, color: "var(--accent)", fontFamily: "'DM Mono', monospace", marginTop: 2 }}>{r.tipo}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 24, fontWeight: 600, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{r.priceMin}€ — {r.priceMax}€</div>
+                      <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1 }}>prezzo rivendita</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, background: "rgba(212,245,94,0.12)", color: "var(--accent)" }}>{tierLabels[r.tier] || r.tier}</span>
+                    {r.isHot && <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, background: "rgba(74,222,128,0.12)", color: "var(--green)" }}>● In stagione</span>}
+                    {r.isNear && <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, background: "rgba(251,191,36,0.12)", color: "var(--yellow)" }}>● Quasi in stagione</span>}
+                    {r.fakeRisk === "alto" && <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, background: "rgba(248,113,113,0.12)", color: "var(--red)" }}>⚠️ Rischio falsi alto</span>}
+                    <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, background: "var(--surface2)", color: "var(--muted)" }}>Budget {r.budget}</span>
+                  </div>
+                </div>
+
+                {/* Perché comprarlo */}
+                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>Perché comprarlo</div>
+                  {r.reasons.map((reason, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+                      <span style={{ color: "var(--accent)", fontSize: 12, marginTop: 1 }}>→</span>
+                      <span style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5 }}>{reason}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                    <span style={{ fontSize: 10, color: "var(--dim)" }}>Domanda:</span>
+                    <span style={{ display: "inline-flex", gap: 3 }}>
+                      {[1,2,3,4,5].map(d => (<span key={d} style={{ width: 8, height: 8, borderRadius: "50%", background: d <= r.demand ? (r.demand >= 4 ? "var(--green)" : r.demand >= 3 ? "var(--yellow)" : "var(--red)") : "var(--surface2)" }} />))}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--muted)", marginLeft: 4 }}>{r.demand >= 5 ? "Altissima" : r.demand >= 4 ? "Alta" : r.demand >= 3 ? "Media" : "Bassa"}</span>
+                  </div>
+                </div>
+
+                {/* Dove comprare */}
+                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>Dove comprare</div>
+                  {r.sources.map((src, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent)", flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: "var(--text)" }}>{src}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Consigli pratici */}
+                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 16, marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>Consigli pratici</div>
+                  {r.tips.map((tip, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+                      <span style={{ fontSize: 11, color: "var(--accent)", marginTop: 1 }}>💡</span>
+                      <span style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5 }}>{tip}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Azioni */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={() => {
+                    setValutaForm(p => ({ ...p, brand: r.brand, tipo: r.tipo }));
+                    setValutaResult(null); setSelectedRec(null); setTab("aggiungi");
+                  }} style={{ ...S.addBtn, flex: 1, background: "var(--accent)", color: "#111", fontSize: 13 }}>
+                    🧠 Valuta questo pezzo
+                  </button>
+                  <a href={`https://www.vinted.it/catalog?search_text=${encodeURIComponent(r.brand + " " + r.tipo)}&order=relevance`} target="_blank" rel="noopener noreferrer" style={{
+                    ...S.addBtn, flex: 1, background: "rgba(0,191,165,0.12)", border: "1px solid rgba(0,191,165,0.3)",
+                    color: "#00bfa5", fontSize: 13, textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  }}>
+                    <Search size={14} /> Cerca su Vinted
+                  </a>
+                </div>
+              </div>
+            );
+          }
+
+          /* List view with accordions */
           return (
             <div style={{ animation: "fadeIn 0.3s ease" }}>
               <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 11, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Cosa comprare</div>
-                <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 500 }}>Raccomandazioni per {rec.monthName} — basate su stagionalità, domanda e margini</div>
+                <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 500 }}>Raccomandazioni per {rec.monthName}</div>
               </div>
 
-              {sections.map((sec) => (
-                <div key={sec.key} style={{ marginBottom: 20 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 18 }}>{sec.icon}</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{sec.title}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--dim)", marginBottom: 10, lineHeight: 1.4 }}>{sec.desc}</div>
-
-                  {sec.items.map((item, i) => (
-                    <div key={`${item.brand}-${item.tipo}-${i}`}
-                      onClick={() => {
-                        setValutaForm(p => ({ ...p, brand: item.brand, tipo: item.tipo }));
-                        setValutaResult(null);
-                        setTab("aggiungi");
-                      }}
-                      style={{
-                        ...S.brandRow, cursor: "pointer",
-                        animation: `slideUp 0.25s ease ${i * 0.03}s forwards`, opacity: 0,
-                      }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--text)" }}>{item.brand}</span>
-                            <span style={{ fontSize: 11, color: "var(--accent)", fontFamily: "'DM Mono', monospace" }}>{item.tipo}</span>
-                          </div>
-                          <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
-                            {item.reasons.slice(0, 2).join(" · ")}
-                          </div>
-                          <div style={{ display: "flex", gap: 10, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "rgba(212,245,94,0.12)", color: "var(--accent)", fontFamily: "'DM Mono', monospace" }}>
-                              {item.priceMin}€ — {item.priceMax}€
-                            </span>
-                            <span style={{ display: "inline-flex", gap: 2 }}>
-                              {[1,2,3,4,5].map(d => (
-                                <span key={d} style={{
-                                  width: 6, height: 6, borderRadius: "50%",
-                                  background: d <= item.demand ? (item.demand >= 4 ? "var(--green)" : item.demand >= 3 ? "var(--yellow)" : "var(--red)") : "var(--surface2)",
-                                }} />
-                              ))}
-                            </span>
-                            {item.fakeRisk === "alto" && <span style={{ fontSize: 9, color: "var(--red)" }}>⚠️ Falsi</span>}
-                            {item.isHot && <span style={{ fontSize: 9, color: "var(--green)" }}>● In stagione</span>}
-                            {item.isNear && <span style={{ fontSize: 9, color: "var(--yellow)" }}>● Quasi in stagione</span>}
-                          </div>
+              {sections.map((sec) => {
+                const isOpen = openAcquistaSections[sec.key] || false;
+                return (
+                  <div key={sec.key} style={{ marginBottom: 10 }}>
+                    <button onClick={() => setOpenAcquistaSections(p => ({ ...p, [sec.key]: !isOpen }))} style={{
+                      width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--border)",
+                      borderRadius: isOpen ? "10px 10px 0 0" : 10, cursor: "pointer",
+                      fontFamily: "'DM Mono', monospace",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 18 }}>{sec.icon}</span>
+                        <div style={{ textAlign: "left" }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{sec.title}</div>
+                          <div style={{ fontSize: 10, color: "var(--dim)", marginTop: 2 }}>{sec.desc} ({sec.items.length})</div>
                         </div>
-                        <ChevronRight size={16} style={{ color: "var(--dim)", flexShrink: 0, marginLeft: 8 }} />
                       </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
+                      {isOpen ? <ChevronUp size={16} style={{ color: "var(--dim)" }} /> : <ChevronDown size={16} style={{ color: "var(--dim)" }} />}
+                    </button>
+
+                    {isOpen && (
+                      <div style={{ border: "1px solid var(--border)", borderTop: "none", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
+                        {sec.items.map((item, i) => (
+                          <div key={`${item.brand}-${item.tipo}-${i}`}
+                            onClick={() => setSelectedRec(item)}
+                            style={{
+                              padding: "12px 14px", cursor: "pointer",
+                              borderBottom: i < sec.items.length - 1 ? "1px solid var(--border)" : "none",
+                              background: "var(--surface)",
+                              transition: "background 0.15s",
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = "var(--surface2)"}
+                            onMouseLeave={(e) => e.currentTarget.style.background = "var(--surface)"}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>{item.brand}</span>
+                                  <span style={{ fontSize: 11, color: "var(--accent)", fontFamily: "'DM Mono', monospace" }}>{item.tipo}</span>
+                                </div>
+                                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: 10, color: "var(--muted)", fontFamily: "'DM Mono', monospace" }}>{item.priceMin}€–{item.priceMax}€</span>
+                                  <span style={{ display: "inline-flex", gap: 2 }}>
+                                    {[1,2,3,4,5].map(d => (<span key={d} style={{ width: 5, height: 5, borderRadius: "50%", background: d <= item.demand ? (item.demand >= 4 ? "var(--green)" : "var(--yellow)") : "var(--surface2)" }} />))}
+                                  </span>
+                                  {item.fakeRisk === "alto" && <span style={{ fontSize: 9, color: "var(--red)" }}>⚠️</span>}
+                                  {item.isHot && <span style={{ fontSize: 9, color: "var(--green)" }}>●</span>}
+                                </div>
+                              </div>
+                              <ChevronRight size={14} style={{ color: "var(--dim)", flexShrink: 0 }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           );
         })()}

@@ -3,9 +3,9 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from "recharts";
-import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, Lightbulb, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil } from "lucide-react";
+import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, BookOpen, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil, Lock, ChevronUp } from "lucide-react";
 import {
-  BRANDS, TIPS, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore
+  BRANDS, GUIDA, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore
 } from "./data";
 
 /* ─── STORAGE ─── */
@@ -107,6 +107,8 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [guidaStep, setGuidaStep] = useState(null);
+  const [openSections, setOpenSections] = useState({});
   const saveTimer = useRef(null);
 
   const [form, setForm] = useState({
@@ -793,20 +795,132 @@ export default function App() {
         {/* ═══ STRATEGIE ═══ */}
         {tab === "tips" && (
           <div style={{ animation: "fadeIn 0.3s ease" }}>
-            <div style={S.tipsGrid}>
-              {TIPS.map((t, i) => (
-                <div key={t.num} style={{ ...S.tipCard, animation: `slideUp 0.3s ease ${i * 0.05}s forwards`, opacity: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                    <span style={{ fontSize: 28 }}>{t.icon}</span>
-                    <div>
-                      <div style={S.tipNum}>{t.num}</div>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>{t.title}</div>
+            {guidaStep === null ? (
+              /* ── STEP LIST ── */
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: 11, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Percorso Reseller</div>
+                  <div style={{ fontSize: 14, color: "var(--text)", fontWeight: 500 }}>11 passi — dal primo acquisto alla crescita</div>
+                </div>
+                {GUIDA.map((g, i) => (
+                  <div key={g.step}
+                    onClick={() => !g.locked && setGuidaStep(g.step)}
+                    style={{
+                      ...S.brandRow,
+                      display: "flex", alignItems: "center", gap: 14,
+                      opacity: g.locked ? 0.45 : 1,
+                      cursor: g.locked ? "default" : "pointer",
+                      animation: `slideUp 0.3s ease ${i * 0.04}s forwards`, opacity: 0,
+                    }}>
+                    <span style={{ fontSize: 28, filter: g.locked ? "grayscale(1)" : "none" }}>{g.icon}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                        <span style={{ fontSize: 10, color: "var(--accent)", fontFamily: "'DM Mono', monospace" }}>PASSO {String(g.step).padStart(2, "0")}</span>
+                        {g.locked && <Lock size={11} style={{ color: "var(--dim)" }} />}
+                        {!g.locked && g.sections.length > 0 && <span style={{ fontSize: 9, background: "rgba(212,245,94,0.15)", color: "var(--accent)", padding: "2px 6px", borderRadius: 4 }}>DISPONIBILE</span>}
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: g.locked ? "var(--dim)" : "var(--text)" }}>{g.title}</div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2, lineHeight: 1.4 }}>{g.desc}</div>
+                    </div>
+                    {!g.locked && <ChevronRight size={16} style={{ color: "var(--dim)", flexShrink: 0 }} />}
+                  </div>
+                ))}
+                <div style={{ textAlign: "center", padding: "20px 0 10px", fontSize: 11, color: "var(--dim)", lineHeight: 1.5 }}>
+                  🔒 I passi bloccati saranno sbloccati nei prossimi aggiornamenti.
+                </div>
+              </div>
+            ) : (
+              /* ── STEP DETAIL ── */
+              (() => {
+                const step = GUIDA.find((g) => g.step === guidaStep);
+                if (!step) return null;
+                return (
+                  <div>
+                    <button onClick={() => { setGuidaStep(null); setOpenSections({}); }} style={S.backBtn}>
+                      <ArrowLeft size={14} /> Tutti i passi
+                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+                      <span style={{ fontSize: 36 }}>{step.icon}</span>
+                      <div>
+                        <div style={{ fontSize: 10, color: "var(--accent)", fontFamily: "'DM Mono', monospace", marginBottom: 2 }}>PASSO {String(step.step).padStart(2, "0")}</div>
+                        <div style={{ fontSize: 18, fontWeight: 600, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{step.title}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.5, marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid var(--border)" }}>
+                      {step.desc}
+                    </div>
+
+                    {step.sections.map((sec, si) => {
+                      const isOpen = openSections[sec.id] !== undefined ? openSections[sec.id] : si === 0;
+                      return (
+                        <div key={sec.id} style={{
+                          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+                          marginBottom: 10, overflow: "hidden",
+                          animation: `slideUp 0.3s ease ${si * 0.06}s forwards`, opacity: 0,
+                        }}>
+                          <button
+                            onClick={() => setOpenSections((prev) => ({ ...prev, [sec.id]: !isOpen }))}
+                            style={{
+                              width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                              padding: "14px 16px", background: "none", border: "none", cursor: "pointer",
+                              fontFamily: "'DM Mono', monospace",
+                            }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <span style={{
+                                width: 24, height: 24, borderRadius: "50%",
+                                background: isOpen ? "var(--accent)" : "var(--surface2)",
+                                color: isOpen ? "#000" : "var(--dim)",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: 11, fontWeight: 600, flexShrink: 0,
+                                transition: "all 0.2s",
+                              }}>{si + 1}</span>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: isOpen ? "var(--text)" : "var(--muted)", textAlign: "left" }}>
+                                {sec.title}
+                              </span>
+                            </div>
+                            {isOpen ? <ChevronUp size={14} style={{ color: "var(--dim)", flexShrink: 0 }} /> : <ChevronDown size={14} style={{ color: "var(--dim)", flexShrink: 0 }} />}
+                          </button>
+                          {isOpen && (
+                            <div style={{ padding: "0 16px 16px", animation: "fadeIn 0.2s ease" }}>
+                              {sec.content.map((para, pi) => (
+                                <p key={pi} style={{
+                                  fontSize: 12, color: "var(--muted)", lineHeight: 1.7, margin: 0,
+                                  marginBottom: pi < sec.content.length - 1 ? 12 : 0,
+                                  ...(para.match(/^[A-Z\d][\w\s&—]+\s—\s/) ? {
+                                    background: "var(--surface2)", padding: "10px 12px", borderRadius: 8, borderLeft: "3px solid var(--accent)",
+                                  } : {}),
+                                  ...(para.match(/^(STEP [A-C]|[1-4])\.\s|^[1-4]\.\s/) ? {
+                                    paddingLeft: 8,
+                                  } : {}),
+                                }}>
+                                  {para}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Navigation between steps */}
+                    <div style={{ display: "flex", gap: 10, marginTop: 20, paddingBottom: 10 }}>
+                      {step.step > 1 && (
+                        <button onClick={() => { setGuidaStep(step.step - 1); setOpenSections({}); window.scrollTo(0,0); }}
+                          style={{ flex: 1, padding: "12px", background: "var(--surface)", border: "1px solid var(--border)", color: "var(--muted)", fontSize: 11, borderRadius: 8, cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>
+                          ← Passo {step.step - 1}
+                        </button>
+                      )}
+                      {step.step < GUIDA.length && !GUIDA[step.step]?.locked && (
+                        <button onClick={() => { setGuidaStep(step.step + 1); setOpenSections({}); window.scrollTo(0,0); }}
+                          style={{ flex: 1, padding: "12px", background: "var(--accent)", border: "none", color: "#000", fontSize: 11, fontWeight: 600, borderRadius: 8, cursor: "pointer", fontFamily: "'DM Mono', monospace" }}>
+                          Passo {step.step + 1} →
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>{t.desc}</div>
-                </div>
-              ))}
-            </div>
+                );
+              })()
+            )}
           </div>
         )}
       </main>
@@ -818,7 +932,7 @@ export default function App() {
           { id: "inventario", icon: Package, label: "Inventario" },
           { id: "aggiungi", icon: Plus, label: "Aggiungi", accent: true },
           { id: "brands", icon: Tag, label: "Brand" },
-          { id: "tips", icon: Lightbulb, label: "Tips" },
+          { id: "tips", icon: BookOpen, label: "Guida" },
         ].map((t) => {
           const Icon = t.icon; const isActive = tab === t.id;
           return (

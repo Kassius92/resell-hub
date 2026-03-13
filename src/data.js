@@ -1017,13 +1017,25 @@ export const PIE_COLORS = ["#d4f55e", "#60a5fa", "#c084fc", "#fb923c", "#f87171"
    ═══════════════════════════════════════════════════════════════ */
 
 export const TIPI_CAPO = [
-  "Felpa", "Felpa con cappuccio", "T-shirt", "Polo", "Camicia",
-  "Giacca", "Giacca puffer", "Giacca a vento", "Cappotto", "Pile/Fleece",
-  "Maglione", "Cardigan", "Jeans", "Pantaloni", "Shorts",
-  "Gonna", "Vestito", "Tuta/Tracksuit", "Costume da bagno",
-  "Sneakers", "Scarpe", "Stivali",
+  "Felpa", "Felpa con cappuccio", "T-shirt", "Canotta/Top", "Polo", "Camicia", "Blazer",
+  "Giacca", "Giacca puffer", "Giacca a vento", "Gilet/Smanicato", "Cappotto", "Pile/Fleece",
+  "Maglione", "Cardigan",
+  "Jeans", "Pantaloni", "Shorts", "Leggings",
+  "Gonna", "Vestito", "Body", "Tuta/Tracksuit",
+  "Costume da bagno",
+  "Sneakers", "Scarpe", "Stivali", "Sandali", "Ciabatte/Slides",
   "Borsa", "Zaino", "Cintura", "Portafoglio", "Sciarpa/Foulard",
-  "Cappello/Berretto", "Occhiali da sole", "Orologio",
+  "Cappello/Berretto", "Occhiali da sole", "Orologio", "Gioielli/Bijoux",
+];
+
+export const BRAND_LIST = [
+  "Nike", "Adidas", "The North Face", "Carhartt", "Ralph Lauren", "Tommy Hilfiger",
+  "Lacoste", "Levi's", "Champion", "Dickies", "Stüssy", "Patagonia", "Moncler",
+  "Gucci", "Louis Vuitton", "Fendi", "Prada", "Burberry", "Dior", "Versace",
+  "Puma", "New Balance", "Converse", "Vans", "Jordan", "Hugo Boss", "Calvin Klein",
+  "Napapijri", "Arc'teryx", "Salomon", "Stone Island", "Supreme",
+  "Zara", "H&M", "Mango", "Hermès", "Chanel", "Reebok", "Umbro", "Fila", "Kappa",
+  "Timberland", "Dr. Martens", "Columbia", "Helly Hansen",
 ];
 
 /* ─── PRICE DATABASE ───
@@ -1366,12 +1378,14 @@ const SIZE_POP = {
 const SEASON_HOT = {
   "Giacca puffer": [9,10,11,12,1,2], "Giacca": [9,10,11,12,1,2,3], "Cappotto": [9,10,11,12,1,2],
   "Giacca a vento": [3,4,5,9,10], "Pile/Fleece": [9,10,11,12,1,2],
+  "Gilet/Smanicato": [9,10,11,3,4],
   "Felpa": [9,10,11,12,1,2,3], "Felpa con cappuccio": [9,10,11,12,1,2,3],
   "Maglione": [9,10,11,12,1,2], "Cardigan": [9,10,11,1,2,3],
-  "T-shirt": [4,5,6,7,8], "Polo": [4,5,6,7,8],
+  "T-shirt": [4,5,6,7,8], "Canotta/Top": [5,6,7,8], "Polo": [4,5,6,7,8],
   "Shorts": [4,5,6,7,8], "Costume da bagno": [4,5,6,7],
   "Gonna": [4,5,6,7,8], "Vestito": [4,5,6,7,8,9],
-  "Stivali": [9,10,11,12,1,2],
+  "Stivali": [9,10,11,12,1,2], "Sandali": [4,5,6,7,8], "Ciabatte/Slides": [4,5,6,7,8,9],
+  "Leggings": [9,10,11,12,1,2,3],
 };
 /* Tipi "tutto l'anno" (non in SEASON_HOT) non subiscono penalty stagionale */
 
@@ -1393,7 +1407,7 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
 
   /* 3. Moltiplicatore taglia */
   const genLower = (genere || "unisex").toLowerCase();
-  const isShoe = ["Sneakers","Scarpe","Stivali"].includes(tipo);
+  const isShoe = ["Sneakers","Scarpe","Stivali","Sandali","Ciabatte/Slides"].includes(tipo);
   const sizeMap = isShoe ? SIZE_POP.scarpe : (SIZE_POP[genLower] || SIZE_POP.unisex);
   const sizeMult = sizeMap[taglia] || (taglia === "Unica" ? 1.0 : 0.85);
   min = Math.round(min * sizeMult);

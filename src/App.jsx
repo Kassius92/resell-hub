@@ -6,7 +6,7 @@ import {
 import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, BookOpen, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil, Lock, ChevronUp } from "lucide-react";
 import {
   BRANDS, GUIDA, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore,
-  TIPI_CAPO, evaluateItem, recordSale
+  TIPI_CAPO, BRAND_LIST, evaluateItem, recordSale
 } from "./data";
 
 /* ─── STORAGE ─── */
@@ -86,6 +86,64 @@ function DemandDots({ level }) {
   );
 }
 
+/* ─── AUTOCOMPLETE INPUT ─── */
+function AutocompleteInput({ value, onChange, options, placeholder, style }) {
+  const [open, setOpen] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const ref = useRef(null);
+
+  const filtered = value.trim().length > 0
+    ? options.filter(o => o.toLowerCase().includes(value.toLowerCase()))
+    : options;
+  const exactMatch = options.some(o => o.toLowerCase() === value.toLowerCase());
+
+  useEffect(() => {
+    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <input
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => { setFocused(true); setOpen(true); }}
+        onBlur={() => setFocused(false)}
+        placeholder={placeholder}
+        style={{
+          ...style,
+          borderColor: value.trim().length > 0 && !exactMatch ? "var(--red)" : focused ? "var(--accent)" : undefined,
+        }}
+      />
+      {value.trim().length > 0 && !exactMatch && (
+        <div style={{ fontSize: 9, color: "var(--red)", marginTop: 2 }}>Seleziona dalla lista</div>
+      )}
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
+          maxHeight: 180, overflowY: "auto",
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
+          marginTop: 4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+        }}>
+          {filtered.map(o => (
+            <div key={o}
+              onMouseDown={(e) => { e.preventDefault(); onChange(o); setOpen(false); }}
+              style={{
+                padding: "8px 12px", fontSize: 12, cursor: "pointer",
+                color: o.toLowerCase() === value.toLowerCase() ? "var(--accent)" : "var(--text)",
+                background: o.toLowerCase() === value.toLowerCase() ? "rgba(212,245,94,0.1)" : "transparent",
+              }}
+              onMouseEnter={(e) => e.target.style.background = "var(--surface2)"}
+              onMouseLeave={(e) => e.target.style.background = o.toLowerCase() === value.toLowerCase() ? "rgba(212,245,94,0.1)" : "transparent"}
+            >{o}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── MAIN APP ─── */
 export default function App() {
   const [tab, setTab] = useState("dashboard");
@@ -118,15 +176,18 @@ export default function App() {
     condizione: "Nuovo con etichette", genere: "Unisex", note: ""
   });
 
-  const [addMode, setAddMode] = useState("valuta"); // "valuta" | "diretto"
   const [valutaForm, setValutaForm] = useState({
-    brand: "", tipo: "Felpa", genere: "Uomo", taglia: "M",
-    condizione: "Ottime condizioni", costoAcquisto: "", dettagli: ""
+    brand: "", tipo: "", genere: "Uomo", taglia: "M",
+    condizione: "Ottime condizioni", costoAcquisto: "", dettagli: "",
+    fonte: "Mercatino", note: ""
   });
   const [valutaResult, setValutaResult] = useState(null);
 
   function runValutazione() {
     if (!valutaForm.brand.trim()) { showToast("Inserisci il brand!", "err"); return; }
+    if (!BRAND_LIST.some(b => b.toLowerCase() === valutaForm.brand.toLowerCase())) { showToast("Brand non nel database! Seleziona dalla lista.", "err"); return; }
+    if (!valutaForm.tipo.trim()) { showToast("Inserisci il tipo di capo!", "err"); return; }
+    if (!TIPI_CAPO.some(t => t.toLowerCase() === valutaForm.tipo.toLowerCase())) { showToast("Tipo di capo non valido! Seleziona dalla lista.", "err"); return; }
     const result = evaluateItem(valutaForm);
     setValutaResult(result);
   }
@@ -136,14 +197,14 @@ export default function App() {
     const nome = [valutaForm.brand, valutaForm.tipo, valutaForm.dettagli].filter(Boolean).join(" ").trim();
     const newArticle = {
       id: genId(), nome, brand: valutaForm.brand.trim(),
-      categoria: ["Sneakers","Scarpe","Stivali"].includes(valutaForm.tipo) ? "Scarpe" :
+      categoria: ["Sneakers","Scarpe","Stivali","Sandali","Ciabatte/Slides"].includes(valutaForm.tipo) ? "Scarpe" :
                  ["Borsa","Zaino"].includes(valutaForm.tipo) ? "Borse" :
-                 ["Cintura","Portafoglio","Sciarpa/Foulard","Cappello/Berretto","Occhiali da sole","Orologio"].includes(valutaForm.tipo) ? "Accessori" : "Abbigliamento",
+                 ["Cintura","Portafoglio","Sciarpa/Foulard","Cappello/Berretto","Occhiali da sole","Orologio","Gioielli/Bijoux"].includes(valutaForm.tipo) ? "Accessori" : "Abbigliamento",
       costo: parseFloat(valutaForm.costoAcquisto) || 0,
       prezzo: Math.round((valutaResult.priceMin + valutaResult.priceMax) / 2),
-      prezzoVendita: null, fonte: "Mercatino", taglia: valutaForm.taglia,
+      prezzoVendita: null, fonte: valutaForm.fonte, taglia: valutaForm.taglia,
       condizione: valutaForm.condizione, genere: valutaForm.genere,
-      note: valutaForm.dettagli, venduto: false,
+      note: valutaForm.note || valutaForm.dettagli, venduto: false,
       data: new Date().toISOString().slice(0, 10),
     };
     setArticles(prev => [newArticle, ...prev]);
@@ -508,33 +569,21 @@ export default function App() {
         {/* ═══ AGGIUNGI ═══ */}
         {tab === "aggiungi" && (
           <div style={{ animation: "fadeIn 0.3s ease", maxWidth: 500 }}>
-            {/* ── MODE TOGGLE ── */}
-            {!valutaResult && (
-            <div style={{ display: "flex", gap: 0, marginBottom: 16, background: "var(--surface)", borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden" }}>
-              {[{id:"valuta",label:"🧠 Valuta prima"},{id:"diretto",label:"+ Aggiungi diretto"}].map(m => (
-                <button key={m.id} onClick={() => { setAddMode(m.id); setValutaResult(null); }} style={{
-                  flex: 1, padding: "10px 0", fontSize: 12, fontWeight: 500, border: "none", cursor: "pointer",
-                  fontFamily: "'DM Mono', monospace",
-                  background: addMode === m.id ? "var(--accent)" : "transparent",
-                  color: addMode === m.id ? "#111" : "var(--muted)",
-                }}>{m.label}</button>
-              ))}
-            </div>
-            )}
 
-            {/* ── VALUTA MODE ── */}
-            {addMode === "valuta" && !valutaResult && (
+            {/* ── FORM (hidden when result showing) ── */}
+            {!valutaResult && (
               <div>
+                <SectionTitle>Valuta un pezzo</SectionTitle>
                 <div style={{ fontSize: 11, color: "var(--dim)", marginBottom: 12, lineHeight: 1.5 }}>
-                  Inserisci i dettagli del pezzo che vuoi comprare. L'app stima il prezzo di rivendita e ti dice se conviene.
+                  Inserisci i dettagli del pezzo. L'app stima il prezzo di rivendita e ti dice se conviene.
                 </div>
                 <div style={S.card}>
                   <div style={S.formRow}>
-                    <Field label="Brand *"><input value={valutaForm.brand} onChange={(e) => setValutaForm(p => ({...p, brand: e.target.value}))} placeholder="es. Nike" style={S.input} /></Field>
+                    <Field label="Brand *">
+                      <AutocompleteInput value={valutaForm.brand} onChange={(v) => setValutaForm(p => ({...p, brand: v}))} options={BRAND_LIST} placeholder="Scrivi il brand..." style={S.input} />
+                    </Field>
                     <Field label="Tipo di capo *">
-                      <select value={valutaForm.tipo} onChange={(e) => setValutaForm(p => ({...p, tipo: e.target.value}))} style={S.input}>
-                        {TIPI_CAPO.map(t => <option key={t}>{t}</option>)}
-                      </select>
+                      <AutocompleteInput value={valutaForm.tipo} onChange={(v) => setValutaForm(p => ({...p, tipo: v}))} options={TIPI_CAPO} placeholder="Scrivi il tipo..." style={S.input} />
                     </Field>
                   </div>
                   <div style={S.formRow}>
@@ -548,19 +597,25 @@ export default function App() {
                   <Field label="Modello / dettagli (opzionale)">
                     <input value={valutaForm.dettagli} onChange={(e) => setValutaForm(p => ({...p, dettagli: e.target.value}))} placeholder="es. Nuptse 700, 501 Original, Baguette..." style={S.input} />
                   </Field>
+                  <div style={S.formRow}>
+                    <Field label="Fonte acquisto"><select value={valutaForm.fonte} onChange={(e) => setValutaForm(p => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map(f => <option key={f}>{f}</option>)}</select></Field>
+                  </div>
+                  <Field label="Note (opzionale)">
+                    <textarea value={valutaForm.note} onChange={(e) => setValutaForm(p => ({...p, note: e.target.value}))} placeholder="es. Etichetta presente, piccolo difetto..." rows={2} style={{ ...S.input, resize: "vertical", minHeight: 48 }} />
+                  </Field>
                   <button onClick={runValutazione} style={{ ...S.addBtn, background: "var(--accent)", color: "#111" }}>🧠 Valuta questo pezzo</button>
                 </div>
               </div>
             )}
 
-            {/* ── VALUTA RESULT SCREEN ── */}
-            {addMode === "valuta" && valutaResult && (
+            {/* ── RESULT SCREEN ── */}
+            {valutaResult && (
               <div style={{ animation: "fadeIn 0.3s ease" }}>
                 <button onClick={() => setValutaResult(null)} style={S.backBtn}>
                   <ArrowLeft size={14} /> Nuova valutazione
                 </button>
 
-                {/* Verdict header */}
+                {/* Verdict */}
                 <div style={{
                   background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
                   padding: 24, textAlign: "center", marginBottom: 14,
@@ -577,7 +632,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Price estimate */}
+                {/* Price */}
                 <div style={{
                   background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
                   padding: 18, marginBottom: 14,
@@ -604,7 +659,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Confidence bar */}
+                  {/* Confidence */}
                   <div style={{ paddingTop: 10, borderTop: "1px solid var(--border)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                       <span style={{ fontSize: 10, color: "var(--dim)" }}>Affidabilità stima</span>
@@ -648,7 +703,7 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Vinted search button */}
+                {/* Vinted button */}
                 <a href={valutaResult.vintedUrl} target="_blank" rel="noopener noreferrer" style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   padding: "14px 16px", borderRadius: 12,
@@ -677,48 +732,6 @@ export default function App() {
                   }}>
                     🧠 Valuta un altro
                   </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── DIRECT ADD MODE ── */}
-            {addMode === "diretto" && (
-              <div>
-                <div style={{ fontSize: 11, color: "var(--dim)", marginBottom: 12, lineHeight: 1.5 }}>
-                  Aggiungi direttamente un articolo al tuo inventario.
-                </div>
-                <div style={S.card}>
-                  <Field label="Nome articolo" required>
-                    <input value={form.nome} onChange={(e) => setForm((p) => ({...p, nome: e.target.value}))} placeholder="es. Felpa Nike L" style={S.input} />
-                  </Field>
-                  <div style={S.formRow}>
-                    <Field label="Brand"><input value={form.brand} onChange={(e) => setForm((p) => ({...p, brand: e.target.value}))} placeholder="Nike" style={S.input} /></Field>
-                    <Field label="Taglia"><select value={form.taglia} onChange={(e) => setForm((p) => ({...p, taglia: e.target.value}))} style={S.input}>{TAGLIE.map((t) => <option key={t}>{t}</option>)}</select></Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Condizione"><select value={form.condizione} onChange={(e) => setForm((p) => ({...p, condizione: e.target.value}))} style={S.input}>{CONDIZIONI.map((c) => <option key={c}>{c}</option>)}</select></Field>
-                    <Field label="Genere"><select value={form.genere} onChange={(e) => setForm((p) => ({...p, genere: e.target.value}))} style={S.input}>{GENERI.map((g) => <option key={g}>{g}</option>)}</select></Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Categoria"><select value={form.categoria} onChange={(e) => setForm((p) => ({...p, categoria: e.target.value}))} style={S.input}>{CATEGORIE.map((c) => <option key={c}>{c}</option>)}</select></Field>
-                    <Field label="Fonte acquisto"><select value={form.fonte} onChange={(e) => setForm((p) => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map((f) => <option key={f}>{f}</option>)}</select></Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Costo acquisto (€)"><input type="number" value={form.costo} onChange={(e) => setForm((p) => ({...p, costo: e.target.value}))} placeholder="0.00" step="0.01" min="0" style={S.input} /></Field>
-                    <Field label="Prezzo vendita (€)"><input type="number" value={form.prezzo} onChange={(e) => setForm((p) => ({...p, prezzo: e.target.value}))} placeholder="0.00" step="0.01" min="0" style={S.input} /></Field>
-                  </div>
-                  {(form.costo || form.prezzo) && (
-                    <div style={S.marginPreview}>
-                      <span style={{ color: "var(--muted)" }}>Margine previsto:</span>
-                      <span style={{ fontWeight: 500, color: previewMargin >= 0 ? "var(--green)" : "var(--red)" }}>
-                        {formatEur(previewMargin)}{previewPct !== null && ` (${previewPct}%)`}
-                      </span>
-                    </div>
-                  )}
-                  <Field label="Note (opzionale)">
-                    <textarea value={form.note} onChange={(e) => setForm((p) => ({...p, note: e.target.value}))} placeholder="es. Etichetta presente, piccolo difetto..." rows={2} style={{ ...S.input, resize: "vertical", minHeight: 48 }} />
-                  </Field>
-                  <button onClick={addArticle} style={S.addBtn}>+ Aggiungi articolo</button>
                 </div>
               </div>
             )}

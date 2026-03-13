@@ -1011,3 +1011,511 @@ export const TAGLIE = ["XS", "S", "M", "L", "XL", "XXL", "Unica", "36", "37", "3
 export const CONDIZIONI = ["Nuovo con etichette", "Nuovo senza etichette", "Ottime condizioni", "Buone condizioni", "Discrete condizioni"];
 export const GENERI = ["Uomo", "Donna", "Unisex"];
 export const PIE_COLORS = ["#d4f55e", "#60a5fa", "#c084fc", "#fb923c", "#f87171"];
+
+/* ═══════════════════════════════════════════════════════════════
+   MOTORE DI VALUTAZIONE — Stima prezzo rivendita
+   ═══════════════════════════════════════════════════════════════ */
+
+export const TIPI_CAPO = [
+  "Felpa", "Felpa con cappuccio", "T-shirt", "Polo", "Camicia",
+  "Giacca", "Giacca puffer", "Giacca a vento", "Cappotto", "Pile/Fleece",
+  "Maglione", "Cardigan", "Jeans", "Pantaloni", "Shorts",
+  "Gonna", "Vestito", "Tuta/Tracksuit", "Costume da bagno",
+  "Sneakers", "Scarpe", "Stivali",
+  "Borsa", "Zaino", "Cintura", "Portafoglio", "Sciarpa/Foulard",
+  "Cappello/Berretto", "Occhiali da sole", "Orologio",
+];
+
+/* ─── PRICE DATABASE ───
+   Ogni brand ha prezzi base per tipo di capo.
+   _default = fallback se il tipo non è nel database.
+   min/max = range in € per condizione "ottime condizioni" e taglia media.
+   conf = confidenza base (0-100) — quanto è affidabile la stima per quel brand+tipo.
+*/
+const PRICE_DB = {
+  "Nike": {
+    _tier: "streetwear", _demand: 5, _fakeRisk: "medio", _conf: 80,
+    "T-shirt": { min: 8, max: 15 }, "Polo": { min: 10, max: 18 },
+    "Felpa": { min: 18, max: 35 }, "Felpa con cappuccio": { min: 20, max: 40 },
+    "Giacca": { min: 25, max: 50 }, "Giacca puffer": { min: 35, max: 70 },
+    "Giacca a vento": { min: 20, max: 45 }, "Pantaloni": { min: 12, max: 25 },
+    "Tuta/Tracksuit": { min: 25, max: 50 }, "Shorts": { min: 8, max: 16 },
+    "Sneakers": { min: 25, max: 65 }, "Zaino": { min: 15, max: 35 },
+    "Cappello/Berretto": { min: 8, max: 18 },
+    _default: { min: 10, max: 25 },
+  },
+  "Adidas": {
+    _tier: "streetwear", _demand: 5, _fakeRisk: "medio", _conf: 80,
+    "T-shirt": { min: 8, max: 15 }, "Polo": { min: 10, max: 18 },
+    "Felpa": { min: 15, max: 30 }, "Felpa con cappuccio": { min: 18, max: 38 },
+    "Giacca": { min: 20, max: 45 }, "Giacca puffer": { min: 30, max: 60 },
+    "Giacca a vento": { min: 18, max: 40 }, "Pantaloni": { min: 12, max: 25 },
+    "Tuta/Tracksuit": { min: 25, max: 55 }, "Shorts": { min: 8, max: 15 },
+    "Sneakers": { min: 20, max: 55 }, "Zaino": { min: 12, max: 30 },
+    _default: { min: 10, max: 22 },
+  },
+  "The North Face": {
+    _tier: "outdoor", _demand: 5, _fakeRisk: "medio", _conf: 78,
+    "Giacca puffer": { min: 40, max: 90 }, "Giacca": { min: 35, max: 75 },
+    "Giacca a vento": { min: 25, max: 55 }, "Pile/Fleece": { min: 25, max: 55 },
+    "Felpa": { min: 20, max: 40 }, "Felpa con cappuccio": { min: 22, max: 45 },
+    "T-shirt": { min: 10, max: 20 }, "Zaino": { min: 20, max: 45 },
+    "Cappello/Berretto": { min: 10, max: 22 },
+    _default: { min: 15, max: 35 },
+  },
+  "Carhartt": {
+    _tier: "streetwear", _demand: 4, _fakeRisk: "basso", _conf: 80,
+    "Giacca": { min: 30, max: 65 }, "Felpa": { min: 20, max: 40 },
+    "Felpa con cappuccio": { min: 22, max: 45 }, "T-shirt": { min: 10, max: 20 },
+    "Pantaloni": { min: 18, max: 35 }, "Cappello/Berretto": { min: 12, max: 25 },
+    _default: { min: 15, max: 30 },
+  },
+  "Ralph Lauren": {
+    _tier: "classic", _demand: 4, _fakeRisk: "medio", _conf: 82,
+    "Polo": { min: 12, max: 28 }, "Camicia": { min: 12, max: 25 },
+    "Felpa": { min: 18, max: 35 }, "Maglione": { min: 15, max: 30 },
+    "Giacca": { min: 25, max: 55 }, "Cappotto": { min: 30, max: 65 },
+    "Pantaloni": { min: 12, max: 22 }, "Cappello/Berretto": { min: 10, max: 22 },
+    "Cintura": { min: 10, max: 25 }, "Sciarpa/Foulard": { min: 12, max: 28 },
+    _default: { min: 10, max: 25 },
+  },
+  "Tommy Hilfiger": {
+    _tier: "classic", _demand: 4, _fakeRisk: "basso", _conf: 82,
+    "Polo": { min: 10, max: 22 }, "Camicia": { min: 10, max: 22 },
+    "Felpa": { min: 15, max: 30 }, "Felpa con cappuccio": { min: 18, max: 35 },
+    "Giacca": { min: 22, max: 50 }, "Giacca puffer": { min: 28, max: 55 },
+    "Maglione": { min: 12, max: 25 }, "T-shirt": { min: 8, max: 15 },
+    _default: { min: 10, max: 22 },
+  },
+  "Lacoste": {
+    _tier: "classic", _demand: 4, _fakeRisk: "basso", _conf: 82,
+    "Polo": { min: 12, max: 28 }, "Felpa": { min: 15, max: 30 },
+    "Maglione": { min: 14, max: 28 }, "Giacca": { min: 20, max: 45 },
+    "T-shirt": { min: 8, max: 16 }, "Cappello/Berretto": { min: 10, max: 20 },
+    _default: { min: 10, max: 22 },
+  },
+  "Levi's": {
+    _tier: "classic", _demand: 4, _fakeRisk: "basso", _conf: 85,
+    "Jeans": { min: 15, max: 35 }, "Giacca": { min: 25, max: 55 },
+    "T-shirt": { min: 8, max: 15 }, "Camicia": { min: 12, max: 25 },
+    "Shorts": { min: 10, max: 20 },
+    _default: { min: 10, max: 22 },
+  },
+  "Champion": {
+    _tier: "streetwear", _demand: 4, _fakeRisk: "basso", _conf: 82,
+    "Felpa": { min: 15, max: 30 }, "Felpa con cappuccio": { min: 18, max: 35 },
+    "T-shirt": { min: 8, max: 15 }, "Tuta/Tracksuit": { min: 20, max: 40 },
+    _default: { min: 8, max: 20 },
+  },
+  "Dickies": {
+    _tier: "streetwear", _demand: 3, _fakeRisk: "basso", _conf: 82,
+    "Pantaloni": { min: 15, max: 30 }, "Giacca": { min: 20, max: 40 },
+    "Camicia": { min: 12, max: 22 }, "Shorts": { min: 10, max: 18 },
+    _default: { min: 10, max: 22 },
+  },
+  "Stüssy": {
+    _tier: "streetwear", _demand: 4, _fakeRisk: "medio", _conf: 72,
+    "Felpa": { min: 25, max: 50 }, "Felpa con cappuccio": { min: 30, max: 60 },
+    "T-shirt": { min: 15, max: 30 }, "Giacca": { min: 30, max: 65 },
+    "Cappello/Berretto": { min: 15, max: 30 },
+    _default: { min: 15, max: 35 },
+  },
+  "Patagonia": {
+    _tier: "outdoor", _demand: 4, _fakeRisk: "basso", _conf: 78,
+    "Pile/Fleece": { min: 30, max: 65 }, "Giacca": { min: 35, max: 75 },
+    "Giacca puffer": { min: 40, max: 80 }, "Felpa": { min: 20, max: 40 },
+    "T-shirt": { min: 10, max: 22 },
+    _default: { min: 18, max: 40 },
+  },
+  "Moncler": {
+    _tier: "luxury", _demand: 5, _fakeRisk: "alto", _conf: 55,
+    "Giacca puffer": { min: 150, max: 450 }, "Giacca": { min: 120, max: 350 },
+    "Polo": { min: 30, max: 65 }, "Felpa": { min: 50, max: 120 },
+    "Cappello/Berretto": { min: 30, max: 70 }, "Sciarpa/Foulard": { min: 40, max: 90 },
+    _default: { min: 40, max: 150 },
+  },
+  "Gucci": {
+    _tier: "luxury", _demand: 5, _fakeRisk: "alto", _conf: 45,
+    "Cintura": { min: 80, max: 220 }, "Borsa": { min: 120, max: 500 },
+    "Portafoglio": { min: 50, max: 150 }, "Sciarpa/Foulard": { min: 50, max: 140 },
+    "T-shirt": { min: 40, max: 100 }, "Felpa": { min: 60, max: 160 },
+    "Sneakers": { min: 80, max: 250 }, "Occhiali da sole": { min: 40, max: 120 },
+    "Cappello/Berretto": { min: 40, max: 100 },
+    _default: { min: 50, max: 200 },
+  },
+  "Louis Vuitton": {
+    _tier: "luxury", _demand: 5, _fakeRisk: "alto", _conf: 45,
+    "Borsa": { min: 200, max: 800 }, "Portafoglio": { min: 80, max: 250 },
+    "Cintura": { min: 100, max: 280 }, "Sciarpa/Foulard": { min: 80, max: 200 },
+    "Sneakers": { min: 120, max: 350 }, "Zaino": { min: 200, max: 600 },
+    _default: { min: 80, max: 350 },
+  },
+  "Fendi": {
+    _tier: "luxury", _demand: 5, _fakeRisk: "alto", _conf: 48,
+    "Borsa": { min: 120, max: 500 }, "Portafoglio": { min: 50, max: 150 },
+    "Cintura": { min: 60, max: 180 }, "Sciarpa/Foulard": { min: 50, max: 130 },
+    "T-shirt": { min: 35, max: 90 },
+    _default: { min: 50, max: 180 },
+  },
+  "Prada": {
+    _tier: "luxury", _demand: 5, _fakeRisk: "alto", _conf: 48,
+    "Borsa": { min: 150, max: 550 }, "Zaino": { min: 150, max: 450 },
+    "Portafoglio": { min: 50, max: 150 }, "Sneakers": { min: 80, max: 250 },
+    "Cintura": { min: 60, max: 160 }, "Occhiali da sole": { min: 40, max: 110 },
+    _default: { min: 60, max: 200 },
+  },
+  "Burberry": {
+    _tier: "luxury", _demand: 4, _fakeRisk: "alto", _conf: 52,
+    "Sciarpa/Foulard": { min: 50, max: 150 }, "Giacca": { min: 60, max: 180 },
+    "Cappotto": { min: 80, max: 250 }, "Camicia": { min: 30, max: 70 },
+    "Borsa": { min: 80, max: 300 }, "Cintura": { min: 40, max: 100 },
+    _default: { min: 40, max: 130 },
+  },
+  "Dior": {
+    _tier: "luxury", _demand: 5, _fakeRisk: "alto", _conf: 45,
+    "Borsa": { min: 200, max: 700 }, "Sneakers": { min: 120, max: 350 },
+    "Sciarpa/Foulard": { min: 60, max: 160 }, "Cintura": { min: 70, max: 200 },
+    _default: { min: 70, max: 250 },
+  },
+  "Versace": {
+    _tier: "luxury", _demand: 3, _fakeRisk: "alto", _conf: 50,
+    "T-shirt": { min: 30, max: 70 }, "Cintura": { min: 50, max: 140 },
+    "Borsa": { min: 80, max: 300 }, "Occhiali da sole": { min: 35, max: 90 },
+    _default: { min: 35, max: 120 },
+  },
+  "Puma": {
+    _tier: "streetwear", _demand: 3, _fakeRisk: "basso", _conf: 80,
+    "Sneakers": { min: 15, max: 35 }, "Felpa": { min: 12, max: 25 },
+    "T-shirt": { min: 6, max: 12 }, "Giacca": { min: 18, max: 35 },
+    "Tuta/Tracksuit": { min: 18, max: 35 },
+    _default: { min: 8, max: 20 },
+  },
+  "New Balance": {
+    _tier: "streetwear", _demand: 4, _fakeRisk: "basso", _conf: 78,
+    "Sneakers": { min: 25, max: 60 }, "Felpa": { min: 15, max: 28 },
+    "Giacca a vento": { min: 18, max: 35 }, "T-shirt": { min: 8, max: 15 },
+    _default: { min: 10, max: 25 },
+  },
+  "Converse": {
+    _tier: "streetwear", _demand: 4, _fakeRisk: "basso", _conf: 85,
+    "Sneakers": { min: 15, max: 40 },
+    _default: { min: 10, max: 20 },
+  },
+  "Vans": {
+    _tier: "streetwear", _demand: 3, _fakeRisk: "basso", _conf: 85,
+    "Sneakers": { min: 12, max: 30 }, "T-shirt": { min: 6, max: 12 },
+    "Felpa": { min: 12, max: 22 },
+    _default: { min: 8, max: 18 },
+  },
+  "Jordan": {
+    _tier: "streetwear", _demand: 5, _fakeRisk: "alto", _conf: 55,
+    "Sneakers": { min: 40, max: 150 }, "Felpa": { min: 20, max: 40 },
+    "T-shirt": { min: 12, max: 25 }, "Giacca": { min: 30, max: 60 },
+    _default: { min: 15, max: 40 },
+  },
+  "Hugo Boss": {
+    _tier: "classic", _demand: 3, _fakeRisk: "basso", _conf: 78,
+    "Camicia": { min: 12, max: 28 }, "Polo": { min: 12, max: 25 },
+    "Giacca": { min: 25, max: 55 }, "Cappotto": { min: 35, max: 75 },
+    "Maglione": { min: 15, max: 30 }, "Cintura": { min: 12, max: 28 },
+    _default: { min: 12, max: 28 },
+  },
+  "Calvin Klein": {
+    _tier: "classic", _demand: 3, _fakeRisk: "basso", _conf: 80,
+    "Felpa": { min: 12, max: 25 }, "T-shirt": { min: 7, max: 14 },
+    "Jeans": { min: 12, max: 25 }, "Giacca": { min: 20, max: 40 },
+    "Cintura": { min: 10, max: 22 },
+    _default: { min: 8, max: 20 },
+  },
+  "Napapijri": {
+    _tier: "outdoor", _demand: 4, _fakeRisk: "basso", _conf: 78,
+    "Giacca puffer": { min: 30, max: 70 }, "Giacca": { min: 25, max: 55 },
+    "Giacca a vento": { min: 22, max: 45 }, "Felpa": { min: 18, max: 35 },
+    "Felpa con cappuccio": { min: 20, max: 38 }, "T-shirt": { min: 8, max: 16 },
+    _default: { min: 12, max: 28 },
+  },
+  "Arc'teryx": {
+    _tier: "outdoor", _demand: 4, _fakeRisk: "medio", _conf: 65,
+    "Giacca": { min: 50, max: 150 }, "Pile/Fleece": { min: 35, max: 80 },
+    "Giacca a vento": { min: 40, max: 100 },
+    _default: { min: 30, max: 80 },
+  },
+  "Salomon": {
+    _tier: "outdoor", _demand: 4, _fakeRisk: "basso", _conf: 75,
+    "Sneakers": { min: 25, max: 60 }, "Scarpe": { min: 20, max: 50 },
+    "Giacca": { min: 25, max: 55 },
+    _default: { min: 18, max: 40 },
+  },
+  "Stone Island": {
+    _tier: "streetwear", _demand: 5, _fakeRisk: "alto", _conf: 58,
+    "Felpa": { min: 40, max: 90 }, "Giacca": { min: 60, max: 150 },
+    "Cappello/Berretto": { min: 20, max: 45 }, "Polo": { min: 25, max: 50 },
+    "T-shirt": { min: 20, max: 40 }, "Pantaloni": { min: 30, max: 60 },
+    _default: { min: 30, max: 70 },
+  },
+  "Supreme": {
+    _tier: "streetwear", _demand: 4, _fakeRisk: "alto", _conf: 50,
+    "Felpa con cappuccio": { min: 50, max: 150 }, "T-shirt": { min: 25, max: 70 },
+    "Cappello/Berretto": { min: 20, max: 55 }, "Giacca": { min: 50, max: 160 },
+    "Zaino": { min: 40, max: 100 },
+    _default: { min: 25, max: 80 },
+  },
+  "Zara": {
+    _tier: "fast-fashion", _demand: 2, _fakeRisk: "basso", _conf: 88,
+    "Giacca": { min: 8, max: 18 }, "Vestito": { min: 6, max: 14 },
+    "Camicia": { min: 5, max: 12 }, "Pantaloni": { min: 5, max: 12 },
+    "Cappotto": { min: 12, max: 25 },
+    _default: { min: 4, max: 10 },
+  },
+  "H&M": {
+    _tier: "fast-fashion", _demand: 2, _fakeRisk: "basso", _conf: 88,
+    "Giacca": { min: 6, max: 14 }, "Vestito": { min: 5, max: 12 },
+    "Felpa": { min: 5, max: 10 },
+    _default: { min: 3, max: 8 },
+  },
+  "Mango": {
+    _tier: "fast-fashion", _demand: 2, _fakeRisk: "basso", _conf: 85,
+    "Vestito": { min: 6, max: 15 }, "Giacca": { min: 8, max: 18 },
+    "Cappotto": { min: 12, max: 28 },
+    _default: { min: 4, max: 10 },
+  },
+  "Hermès": {
+    _tier: "luxury", _demand: 5, _fakeRisk: "alto", _conf: 40,
+    "Sciarpa/Foulard": { min: 100, max: 300 }, "Cintura": { min: 120, max: 350 },
+    "Borsa": { min: 500, max: 3000 }, "Portafoglio": { min: 100, max: 300 },
+    _default: { min: 100, max: 500 },
+  },
+  "Chanel": {
+    _tier: "luxury", _demand: 5, _fakeRisk: "alto", _conf: 40,
+    "Borsa": { min: 400, max: 2500 }, "Occhiali da sole": { min: 50, max: 150 },
+    "Sciarpa/Foulard": { min: 60, max: 180 },
+    _default: { min: 80, max: 400 },
+  },
+  "Reebok": {
+    _tier: "streetwear", _demand: 3, _fakeRisk: "basso", _conf: 82,
+    "Sneakers": { min: 15, max: 35 }, "Felpa": { min: 12, max: 25 },
+    "T-shirt": { min: 6, max: 12 }, "Giacca a vento": { min: 15, max: 30 },
+    _default: { min: 8, max: 18 },
+  },
+  "Umbro": {
+    _tier: "streetwear", _demand: 3, _fakeRisk: "basso", _conf: 82,
+    "T-shirt": { min: 8, max: 18 }, "Felpa": { min: 12, max: 25 },
+    "Giacca a vento": { min: 15, max: 30 }, "Shorts": { min: 6, max: 14 },
+    _default: { min: 6, max: 16 },
+  },
+  "Fila": {
+    _tier: "streetwear", _demand: 3, _fakeRisk: "basso", _conf: 82,
+    "Felpa": { min: 12, max: 25 }, "T-shirt": { min: 6, max: 14 },
+    "Sneakers": { min: 15, max: 30 }, "Giacca a vento": { min: 15, max: 28 },
+    _default: { min: 8, max: 18 },
+  },
+  "Kappa": {
+    _tier: "streetwear", _demand: 3, _fakeRisk: "basso", _conf: 82,
+    "Tuta/Tracksuit": { min: 15, max: 30 }, "Felpa": { min: 10, max: 20 },
+    "T-shirt": { min: 5, max: 12 }, "Giacca": { min: 15, max: 28 },
+    _default: { min: 6, max: 16 },
+  },
+  "Timberland": {
+    _tier: "classic", _demand: 3, _fakeRisk: "basso", _conf: 80,
+    "Stivali": { min: 25, max: 55 }, "Scarpe": { min: 20, max: 45 },
+    "Giacca": { min: 22, max: 45 }, "Felpa": { min: 12, max: 25 },
+    _default: { min: 12, max: 28 },
+  },
+  "Dr. Martens": {
+    _tier: "classic", _demand: 4, _fakeRisk: "basso", _conf: 80,
+    "Stivali": { min: 30, max: 70 }, "Scarpe": { min: 25, max: 55 },
+    _default: { min: 20, max: 45 },
+  },
+  "Columbia": {
+    _tier: "outdoor", _demand: 3, _fakeRisk: "basso", _conf: 80,
+    "Giacca": { min: 18, max: 40 }, "Pile/Fleece": { min: 15, max: 30 },
+    "Giacca a vento": { min: 15, max: 32 },
+    _default: { min: 10, max: 25 },
+  },
+  "Helly Hansen": {
+    _tier: "outdoor", _demand: 3, _fakeRisk: "basso", _conf: 78,
+    "Giacca": { min: 20, max: 50 }, "Pile/Fleece": { min: 15, max: 30 },
+    "Giacca a vento": { min: 18, max: 38 },
+    _default: { min: 12, max: 28 },
+  },
+};
+
+/* Fallback generico per brand non nel database */
+const UNKNOWN_BRAND = {
+  _tier: "unknown", _demand: 2, _fakeRisk: "basso", _conf: 40,
+  _default: { min: 5, max: 15 },
+};
+
+/* ─── MOLTIPLICATORI ─── */
+const CONDITION_MULT = {
+  "Nuovo con etichette": { mult: 1.25, label: "Nuovo con etichette — prezzo massimo", color: "green" },
+  "Nuovo senza etichette": { mult: 1.12, label: "Nuovo senza etichette — prezzo alto", color: "green" },
+  "Ottime condizioni": { mult: 1.0, label: "Ottime condizioni — prezzo pieno", color: "green" },
+  "Buone condizioni": { mult: 0.82, label: "Buone condizioni — prezzo ridotto", color: "yellow" },
+  "Discrete condizioni": { mult: 0.65, label: "Discrete condizioni — prezzo basso", color: "red" },
+};
+
+const SIZE_POP = {
+  uomo: { "S": 0.85, "M": 1.0, "L": 1.0, "XL": 0.92, "XS": 0.7, "XXL": 0.7 },
+  donna: { "XS": 0.85, "S": 1.0, "M": 1.0, "L": 0.92, "XL": 0.8, "XXL": 0.7 },
+  unisex: { "S": 0.9, "M": 1.0, "L": 1.0, "XL": 0.88, "XS": 0.75, "XXL": 0.7 },
+  scarpe: { "36": 0.8, "37": 0.85, "38": 0.92, "39": 0.95, "40": 1.0, "41": 1.0, "42": 1.0, "43": 0.95, "44": 0.88, "45": 0.8 },
+};
+
+/* Mesi favorevoli per tipo di capo (1=gen ... 12=dic). Lista dei mesi "hot" */
+const SEASON_HOT = {
+  "Giacca puffer": [9,10,11,12,1,2], "Giacca": [9,10,11,12,1,2,3], "Cappotto": [9,10,11,12,1,2],
+  "Giacca a vento": [3,4,5,9,10], "Pile/Fleece": [9,10,11,12,1,2],
+  "Felpa": [9,10,11,12,1,2,3], "Felpa con cappuccio": [9,10,11,12,1,2,3],
+  "Maglione": [9,10,11,12,1,2], "Cardigan": [9,10,11,1,2,3],
+  "T-shirt": [4,5,6,7,8], "Polo": [4,5,6,7,8],
+  "Shorts": [4,5,6,7,8], "Costume da bagno": [4,5,6,7],
+  "Gonna": [4,5,6,7,8], "Vestito": [4,5,6,7,8,9],
+  "Stivali": [9,10,11,12,1,2],
+};
+/* Tipi "tutto l'anno" (non in SEASON_HOT) non subiscono penalty stagionale */
+
+/* ─── FUNZIONE DI VALUTAZIONE ─── */
+export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcquisto, dettagli }) {
+  const brandKey = Object.keys(PRICE_DB).find(k => k.toLowerCase() === (brand || "").toLowerCase());
+  const db = brandKey ? PRICE_DB[brandKey] : null;
+  const brandData = db || UNKNOWN_BRAND;
+  const brandName = brandKey || brand || "Sconosciuto";
+
+  /* 1. Prezzo base */
+  const priceRange = (db && db[tipo]) || (db && db._default) || UNKNOWN_BRAND._default;
+  let { min, max } = priceRange;
+
+  /* 2. Moltiplicatore condizione */
+  const cond = CONDITION_MULT[condizione] || CONDITION_MULT["Ottime condizioni"];
+  min = Math.round(min * cond.mult);
+  max = Math.round(max * cond.mult);
+
+  /* 3. Moltiplicatore taglia */
+  const genLower = (genere || "unisex").toLowerCase();
+  const isShoe = ["Sneakers","Scarpe","Stivali"].includes(tipo);
+  const sizeMap = isShoe ? SIZE_POP.scarpe : (SIZE_POP[genLower] || SIZE_POP.unisex);
+  const sizeMult = sizeMap[taglia] || (taglia === "Unica" ? 1.0 : 0.85);
+  min = Math.round(min * sizeMult);
+  max = Math.round(max * sizeMult);
+
+  /* 4. Stagionalità */
+  const currentMonth = new Date().getMonth() + 1;
+  const hotMonths = SEASON_HOT[tipo];
+  let seasonMult = 1.0;
+  let seasonLabel = "Tutto l'anno — nessun impatto stagionale";
+  let seasonColor = "green";
+  if (hotMonths) {
+    if (hotMonths.includes(currentMonth)) {
+      seasonMult = 1.08;
+      seasonLabel = "Stagione perfetta — domanda alta adesso";
+      seasonColor = "green";
+    } else {
+      /* Quanto è lontano dal mese hot più vicino? */
+      const dists = hotMonths.map(m => Math.min(Math.abs(currentMonth - m), 12 - Math.abs(currentMonth - m)));
+      const minDist = Math.min(...dists);
+      if (minDist <= 2) {
+        seasonMult = 0.92;
+        seasonLabel = "Quasi in stagione — domanda in arrivo";
+        seasonColor = "yellow";
+      } else {
+        seasonMult = 0.75;
+        seasonLabel = "Fuori stagione — vendita lenta";
+        seasonColor = "red";
+      }
+    }
+  }
+  min = Math.round(min * seasonMult);
+  max = Math.round(max * seasonMult);
+
+  /* Assicura min <= max e min >= 1 */
+  if (min < 1) min = 1;
+  if (max < min) max = min;
+
+  /* 5. Confidenza */
+  let confidence = brandData._conf || 40;
+  /* Bonus/malus confidenza */
+  if (!db) confidence = Math.min(confidence, 35); /* brand sconosciuto */
+  if (db && !db[tipo]) confidence -= 8; /* tipo non specifico nel db */
+  if (brandData._tier === "luxury") confidence -= 5; /* luxury = modello conta tanto */
+  if (["M","L","40","41","42"].includes(taglia)) confidence += 3; /* taglia comune = più dati */
+  if (taglia === "Unica") confidence += 5; /* accessori = prezzo più stabile */
+  if (dettagli && dettagli.trim().length > 3) confidence += 5; /* ha specificato il modello */
+  confidence = Math.max(20, Math.min(95, confidence));
+
+  /* 6. Margine */
+  const costo = parseFloat(costoAcquisto) || 0;
+  const marginMin = min - costo;
+  const marginMax = max - costo;
+  const marginPctMin = costo > 0 ? Math.round((marginMin / costo) * 100) : null;
+  const marginPctMax = costo > 0 ? Math.round((marginMax / costo) * 100) : null;
+
+  /* 7. Verdetto */
+  let verdict, verdictColor, verdictIcon;
+  const avgMarginPct = marginPctMin !== null ? (marginPctMin + marginPctMax) / 2 : null;
+  if (avgMarginPct === null) {
+    verdict = "Inserisci il prezzo d'acquisto per il verdetto";
+    verdictColor = "var(--muted)"; verdictIcon = "🔍";
+  } else if (avgMarginPct >= 100) {
+    verdict = "Ottimo affare"; verdictColor = "var(--green)"; verdictIcon = "🟢";
+  } else if (avgMarginPct >= 50) {
+    verdict = "Buon acquisto"; verdictColor = "var(--green)"; verdictIcon = "🟢";
+  } else if (avgMarginPct >= 20) {
+    verdict = "Margine ok ma sottile"; verdictColor = "var(--yellow)"; verdictIcon = "🟡";
+  } else if (avgMarginPct >= 0) {
+    verdict = "Margine troppo basso"; verdictColor = "var(--red)"; verdictIcon = "🔴";
+  } else {
+    verdict = "Ci perdi soldi"; verdictColor = "var(--red)"; verdictIcon = "🔴";
+  }
+
+  /* 8. Indicatori individuali */
+  const indicators = [];
+
+  /* Brand */
+  const demandLabels = { 5: "Domanda altissima", 4: "Domanda alta", 3: "Domanda media", 2: "Domanda bassa", 1: "Domanda molto bassa" };
+  const demandColors = { 5: "green", 4: "green", 3: "yellow", 2: "red", 1: "red" };
+  indicators.push({
+    label: `${brandName} — ${demandLabels[brandData._demand] || "Domanda sconosciuta"}`,
+    color: demandColors[brandData._demand] || "yellow",
+  });
+
+  /* Rischio falsi */
+  if (brandData._fakeRisk === "alto") {
+    indicators.push({ label: "⚠️ Rischio falsi ALTO — verifica autenticità", color: "red" });
+  } else if (brandData._fakeRisk === "medio") {
+    indicators.push({ label: "Rischio falsi medio — controlla etichette", color: "yellow" });
+  }
+
+  /* Condizione */
+  indicators.push({ label: cond.label, color: cond.color });
+
+  /* Taglia */
+  if (sizeMult >= 0.95) {
+    indicators.push({ label: `Taglia ${taglia} — tra le più richieste`, color: "green" });
+  } else if (sizeMult >= 0.82) {
+    indicators.push({ label: `Taglia ${taglia} — vendibile ma meno cercata`, color: "yellow" });
+  } else {
+    indicators.push({ label: `Taglia ${taglia} — mercato piccolo, vendita lenta`, color: "red" });
+  }
+
+  /* Stagionalità */
+  indicators.push({ label: seasonLabel, color: seasonColor });
+
+  /* Fast fashion warning */
+  if (brandData._tier === "fast-fashion") {
+    indicators.push({ label: "Fast fashion — margini molto bassi, serve volume", color: "red" });
+  }
+
+  /* 9. Keyword per ricerca Vinted */
+  const searchParts = [brand, tipo, dettagli].filter(Boolean).map(s => s.trim()).filter(s => s.length > 0);
+  const vintedQuery = searchParts.join(" ");
+  const vintedUrl = `https://www.vinted.it/catalog?search_text=${encodeURIComponent(vintedQuery)}`;
+
+  return {
+    brand: brandName, tipo, priceMin: min, priceMax: max,
+    confidence, marginMin, marginMax, marginPctMin, marginPctMax,
+    verdict, verdictColor, verdictIcon,
+    indicators, vintedUrl, vintedQuery,
+    tier: brandData._tier,
+  };
+}

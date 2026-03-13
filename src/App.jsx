@@ -1,108 +1,95 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, TrendingUp, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, ExternalLink, PlusCircle, Pencil, X } from "lucide-react";
-import { BRANDS, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, calcScore } from "./data";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell
+} from "recharts";
+import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, Lightbulb, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil } from "lucide-react";
+import {
+  BRANDS, TIPS, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore
+} from "./data";
 
 /* ─── STORAGE ─── */
-const KEYS = { articles: "rh-articles", archive: "rh-archive", brands: "rh-brands", checks: "rh-checks", goal: "rh-goal" };
-const load = (k) => { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } };
-const loadVal = (k, def) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch { return def; } };
-const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+const STORAGE_KEY = "resell-hub-data";
+const ARCHIVE_KEY = "resell-hub-archive";
+const CUSTOM_BRANDS_KEY = "resell-hub-custom-brands";
+
+function loadData(key) {
+  try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; }
+}
+function saveData(key, data) {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+}
+
+/* ─── UTILS ─── */
 const genId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const fmt = (n) => (n >= 0 ? "+" : "") + n.toFixed(2) + "€";
+const formatEur = (n) => (n >= 0 ? "+" : "") + n.toFixed(2) + "€";
+const getMonthLabel = (s) => new Date(s).toLocaleDateString("it-IT", { month: "short", year: "2-digit" });
 const getMargin = (a) => (a.venduto ? (a.prezzoVendita ?? a.prezzo) : a.prezzo) - a.costo;
-const monthLabel = (s) => new Date(s).toLocaleDateString("it-IT", { month: "short", year: "2-digit" });
-const ttStyle = { background: "#1e1e23", border: "1px solid #3a3a44", borderRadius: 6, fontSize: 12, fontFamily: "'DM Mono', monospace" };
 
-/* ─── CHECKLIST LOGIC ─── */
-const COND_MULT = { "Nuovo con etichette": 1, "Nuovo senza etichette": 0.92, "Ottime condizioni": 0.82, "Buone condizioni": 0.7, "Discrete condizioni": 0.55 };
-const VEL_ORDER = { "1-3 giorni": 1, "3-7 giorni": 2, "1-2 settimane": 3, "2-4 settimane": 4 };
+const tooltipStyle = { background: "#1e1e23", border: "1px solid #3a3a44", borderRadius: 6, fontSize: 12, fontFamily: "'DM Mono', monospace" };
 
-function evaluateItem(brand, categoria, taglia, condizione, costoAcquisto) {
-  if (!brand || !costoAcquisto || costoAcquisto <= 0) return null;
-
-  const condMult = COND_MULT[condizione] || 0.75;
-  const prezzoStimato = Math.round(costoAcquisto * (1 + (brand.margine / 100)) * condMult * 100) / 100;
-  const margine = prezzoStimato - costoAcquisto;
-  const marginePct = ((margine / costoAcquisto) * 100).toFixed(0);
-
-  // Size check
-  const taglieOk = brand.taglieTop || [];
-  const tagliaRichiesta = taglieOk.length === 0 || taglieOk.some(t => t.toLowerCase().includes(taglia.toLowerCase()) || taglia.toLowerCase().includes(t.toLowerCase()));
-
-  // Build reasons
-  const pro = [];
-  const contro = [];
-
-  if (brand.domanda >= 4) pro.push("Brand molto richiesto");
-  else if (brand.domanda >= 3) pro.push("Domanda discreta");
-  else contro.push("Domanda bassa");
-
-  if (VEL_ORDER[brand.velocita] <= 2) pro.push("Si vende veloce (" + brand.velocita + ")");
-  else contro.push("Vendita lenta (" + brand.velocita + ")");
-
-  if (marginePct >= 60) pro.push("Margine alto (" + marginePct + "%)");
-  else if (marginePct >= 30) pro.push("Margine ok (" + marginePct + "%)");
-  else contro.push("Margine basso (" + marginePct + "%)");
-
-  if (tagliaRichiesta) pro.push("Taglia richiesta");
-  else contro.push("Taglia poco cercata per " + brand.name);
-
-  if (condizione === "Nuovo con etichette") pro.push("Nuovo con etichette = prezzo massimo");
-  else if (condizione === "Discrete condizioni") contro.push("Condizioni discrete abbassano il valore");
-
-  if (brand.rischioFalsi === "alto") contro.push("⚠️ Rischio falsi alto — verifica autenticità!");
-
-  // Verdict
-  let verdict, verdictColor, verdictLabel;
-  const score = (parseInt(marginePct) >= 40 ? 2 : parseInt(marginePct) >= 20 ? 1 : 0)
-    + (brand.domanda >= 4 ? 2 : brand.domanda >= 3 ? 1 : 0)
-    + (VEL_ORDER[brand.velocita] <= 2 ? 1 : 0)
-    + (tagliaRichiesta ? 1 : 0);
-
-  if (score >= 5) { verdict = "green"; verdictColor = "#4ade80"; verdictLabel = "COMPRALO"; }
-  else if (score >= 3) { verdict = "yellow"; verdictColor = "#fbbf24"; verdictLabel = "RISCHIO"; }
-  else { verdict = "red"; verdictColor = "#f87171"; verdictLabel = "LASCIA STARE"; }
-
-  return { prezzoStimato, margine, marginePct, verdict, verdictColor, verdictLabel, pro, contro, tagliaRichiesta };
-}
-
-/* ─── DEMAND DOTS ─── */
-function Dots({ n }) {
-  return <span style={{ display: "inline-flex", gap: 3 }}>{[1,2,3,4,5].map(i => (
-    <span key={i} style={{ width: 7, height: 7, borderRadius: "50%", background: i <= n ? (n >= 4 ? "#4ade80" : n >= 3 ? "#fbbf24" : "#f87171") : "#26262d", border: i <= n ? "none" : "1px solid #2e2e38" }} />
-  ))}</span>;
-}
-
-/* ─── TOOLTIP ─── */
-function Tip({ text }) {
-  const [o, setO] = useState(false);
-  return <span style={{ position: "relative", display: "inline-flex", marginLeft: 4 }}>
-    <span onClick={e => { e.stopPropagation(); setO(!o); }} style={{ cursor: "pointer", color: "#6a6a72" }}><Info size={12} /></span>
-    {o && <><div style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={() => setO(false)} />
-      <div style={{ position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", background: "#26262d", border: "1px solid #2e2e38", borderRadius: 6, padding: "8px 10px", fontSize: 11, color: "#c8c5be", lineHeight: 1.4, width: 200, zIndex: 51, boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}>{text}</div>
-    </>}
-  </span>;
+/* ─── TOOLTIP COMPONENT ─── */
+function InfoTip({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span style={{ position: "relative", display: "inline-flex", alignItems: "center", marginLeft: 4 }}>
+      <span onClick={(e) => { e.stopPropagation(); setOpen(!open); }} style={{ cursor: "pointer", color: "var(--dim)", display: "inline-flex" }}>
+        <Info size={13} />
+      </span>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 50 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)",
+            background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8,
+            padding: "10px 12px", fontSize: 11, color: "var(--text2)", lineHeight: 1.5,
+            width: 220, zIndex: 51, boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          }}>
+            <div style={{ position: "absolute", bottom: -5, left: "50%", transform: "translateX(-50%) rotate(45deg)", width: 10, height: 10, background: "var(--surface2)", borderRight: "1px solid var(--border)", borderBottom: "1px solid var(--border)" }} />
+            {text}
+          </div>
+        </>
+      )}
+    </span>
+  );
 }
 
 /* ─── SORT SELECT ─── */
-function Sort({ value, onChange, options }) {
-  return <div style={{ position: "relative" }}>
-    <select value={value} onChange={e => onChange(e.target.value)} style={{ background: "#1e1e23", border: "1px solid #2e2e38", color: "#9a9a9a", fontSize: 10, padding: "5px 22px 5px 8px", borderRadius: 6, appearance: "none", fontFamily: "'DM Mono', monospace", cursor: "pointer", outline: "none" }}>
-      {options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
-    </select>
-    <ChevronDown size={10} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#6a6a72" }} />
-  </div>;
+function SortSelect({ value, onChange, options }) {
+  return (
+    <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={{
+        background: "var(--surface)", border: "1px solid var(--border)", color: "var(--muted)",
+        fontSize: 10, padding: "5px 24px 5px 8px", borderRadius: 6, appearance: "none",
+        fontFamily: "'DM Mono', monospace", cursor: "pointer", outline: "none",
+      }}>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <ChevronDown size={12} style={{ position: "absolute", right: 6, pointerEvents: "none", color: "var(--dim)" }} />
+    </div>
+  );
+}
+
+/* ─── DEMAND DOTS ─── */
+function DemandDots({ level }) {
+  return (
+    <span style={{ display: "inline-flex", gap: 3 }}>
+      {[1,2,3,4,5].map((i) => (
+        <span key={i} style={{
+          width: 8, height: 8, borderRadius: "50%",
+          background: i <= level ? (level >= 4 ? "var(--green)" : level >= 3 ? "var(--yellow)" : "var(--red)") : "var(--surface2)",
+          border: `1px solid ${i <= level ? "transparent" : "var(--border)"}`,
+        }} />
+      ))}
+    </span>
+  );
 }
 
 /* ─── MAIN APP ─── */
 export default function App() {
-  const [tab, setTab] = useState("dash");
-  const [articles, setArticles] = useState(() => load(KEYS.articles));
-  const [archive, setArchive] = useState(() => load(KEYS.archive));
-  const [customBrands, setCustomBrands] = useState(() => load(KEYS.brands));
-  const [checkHistory, setCheckHistory] = useState(() => load(KEYS.checks));
-  const [monthlyGoal, setMonthlyGoal] = useState(() => loadVal(KEYS.goal, 200));
+  const [tab, setTab] = useState("dashboard");
+  const [articles, setArticles] = useState(() => loadData(STORAGE_KEY));
+  const [archive, setArchive] = useState(() => loadData(ARCHIVE_KEY));
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("tutti");
   const [invSort, setInvSort] = useState("recente");
@@ -110,615 +97,899 @@ export default function App() {
   const [brandSort, setBrandSort] = useState("score");
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [brandTab, setBrandTab] = useState("comprare");
-  const [showReset, setShowReset] = useState(false);
-  const [sellModal, setSellModal] = useState(null);
-  const [sellPrice, setSellPrice] = useState("");
+  const [customBrands, setCustomBrands] = useState(() => loadData(CUSTOM_BRANDS_KEY));
   const [showAddBrand, setShowAddBrand] = useState(false);
   const [editingBrand, setEditingBrand] = useState(null);
   const [brandForm, setBrandForm] = useState({ name: "", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 2, note: "", source: "", prezzo: "", prezzoVendita: "", consiglio: "" });
-  const [showManualAdd, setShowManualAdd] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [sellModal, setSellModal] = useState(null);
+  const [sellPrice, setSellPrice] = useState("");
   const [toast, setToast] = useState(null);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
   const saveTimer = useRef(null);
 
-  // Checklist state
-  const [ckStep, setCkStep] = useState(0);
-  const [ckBrand, setCkBrand] = useState(null);
-  const [ckBrandText, setCkBrandText] = useState("");
-  const [ckCat, setCkCat] = useState("Abbigliamento");
-  const [ckTaglia, setCkTaglia] = useState("M");
-  const [ckCond, setCkCond] = useState("Ottime condizioni");
-  const [ckCosto, setCkCosto] = useState("");
-  const [ckResult, setCkResult] = useState(null);
-
-  // Manual add form
-  const [mf, setMf] = useState({ nome: "", brand: "", categoria: "Abbigliamento", costo: "", prezzo: "", fonte: "Primark", taglia: "M", condizione: "Nuovo con etichette", genere: "Unisex", note: "" });
+  const [form, setForm] = useState({
+    nome: "", brand: "", categoria: "Abbigliamento",
+    costo: "", prezzo: "", fonte: "Primark", taglia: "M",
+    condizione: "Nuovo con etichette", genere: "Unisex", note: ""
+  });
 
   // Auto-save
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      save(KEYS.articles, articles); save(KEYS.archive, archive);
-      save(KEYS.brands, customBrands); save(KEYS.checks, checkHistory);
-      save(KEYS.goal, monthlyGoal);
+      saveData(STORAGE_KEY, articles);
+      saveData(ARCHIVE_KEY, archive);
+      saveData(CUSTOM_BRANDS_KEY, customBrands);
     }, 300);
     return () => clearTimeout(saveTimer.current);
-  }, [articles, archive, customBrands, checkHistory, monthlyGoal]);
+  }, [articles, archive, customBrands]);
 
-  const showToast = useCallback((m, t = "ok") => { setToast({ m, t }); setTimeout(() => setToast(null), 2500); }, []);
-
-  // All brands
-  const allBrands = [...BRANDS, ...customBrands];
-
-  /* ─── CHECKLIST ACTIONS ─── */
-  function resetChecklist() { setCkStep(0); setCkBrand(null); setCkBrandText(""); setCkCat("Abbigliamento"); setCkTaglia("M"); setCkCond("Ottime condizioni"); setCkCosto(""); setCkResult(null); }
-
-  function runEvaluation() {
-    const cost = parseFloat(ckCosto) || 0;
-    if (!ckBrand || cost <= 0) return;
-    const result = evaluateItem(ckBrand, ckCat, ckTaglia, ckCond, cost);
-    setCkResult(result);
-    setCkStep(5);
-  }
-
-  function ckBuy() {
-    const cost = parseFloat(ckCosto) || 0;
-    const art = {
-      id: genId(), nome: `${ckBrand.name} ${ckCat} ${ckTaglia}`, brand: ckBrand.name,
-      categoria: ckCat, costo: cost, prezzo: ckResult.prezzoStimato, prezzoVendita: null,
-      fonte: "", taglia: ckTaglia, condizione: ckCond, genere: "Unisex", note: "",
-      venduto: false, dataAcquisto: new Date().toISOString(), dataVendita: null,
+  // PWA install prompt capture
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      setShowInstallBanner(true);
     };
-    setArticles(p => [art, ...p]);
-    setCheckHistory(p => [{ id: genId(), brand: ckBrand.name, cat: ckCat, taglia: ckTaglia, cond: ckCond, costo: cost, verdict: ckResult.verdictLabel, bought: true, date: new Date().toISOString() }, ...p]);
-    showToast("Aggiunto all'inventario!");
-    resetChecklist();
-    setTab("inv");
+    window.addEventListener("beforeinstallprompt", handler);
+
+    // Check if already installed
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setShowInstallBanner(false);
+    } else {
+      // Show manual banner after 2s even if event doesn't fire (for iOS)
+      const t = setTimeout(() => {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
+        if (!isStandalone) setShowInstallBanner(true);
+      }, 2000);
+      return () => { clearTimeout(t); window.removeEventListener("beforeinstallprompt", handler); };
+    }
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  async function handleInstall() {
+    if (installPrompt) {
+      installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      if (outcome === "accepted") setShowInstallBanner(false);
+      setInstallPrompt(null);
+    } else {
+      // iOS fallback
+      showToast("Tocca il menu del browser → 'Aggiungi a schermata Home'");
+    }
   }
 
-  function ckSkip() {
-    setCheckHistory(p => [{ id: genId(), brand: ckBrand.name, cat: ckCat, taglia: ckTaglia, cond: ckCond, costo: parseFloat(ckCosto) || 0, verdict: ckResult.verdictLabel, bought: false, date: new Date().toISOString() }, ...p]);
-    showToast("Salvato nello storico");
-    resetChecklist();
+  const showToast = useCallback((msg, type = "ok") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  /* ─── ACTIONS ─── */
+  function addArticle() {
+    if (!form.nome.trim()) { showToast("Inserisci il nome!", "err"); return; }
+    const newArt = {
+      id: genId(), nome: form.nome.trim(), brand: form.brand.trim(),
+      categoria: form.categoria, costo: parseFloat(form.costo) || 0,
+      prezzo: parseFloat(form.prezzo) || 0, prezzoVendita: null,
+      fonte: form.fonte, taglia: form.taglia, condizione: form.condizione,
+      genere: form.genere, note: form.note, venduto: false,
+      dataAcquisto: new Date().toISOString(), dataVendita: null,
+    };
+    setArticles((p) => [newArt, ...p]);
+    setForm({ nome: "", brand: "", categoria: "Abbigliamento", costo: "", prezzo: "", fonte: "Primark", taglia: "M", condizione: "Nuovo con etichette", genere: "Unisex", note: "" });
+    showToast("Articolo aggiunto!"); setTab("inventario");
   }
 
-  /* ─── INVENTORY ACTIONS ─── */
-  function addManual() {
-    if (!mf.nome.trim()) { showToast("Inserisci il nome!", "err"); return; }
-    setArticles(p => [{ id: genId(), ...mf, costo: parseFloat(mf.costo) || 0, prezzo: parseFloat(mf.prezzo) || 0, prezzoVendita: null, venduto: false, dataAcquisto: new Date().toISOString(), dataVendita: null }, ...p]);
-    setMf({ nome: "", brand: "", categoria: "Abbigliamento", costo: "", prezzo: "", fonte: "Primark", taglia: "M", condizione: "Nuovo con etichette", genere: "Unisex", note: "" });
-    setShowManualAdd(false); showToast("Aggiunto!");
-  }
+  function openSellModal(a) { setSellModal({ id: a.id, prezzoOriginale: a.prezzo }); setSellPrice(String(a.prezzo)); }
 
   function confirmSell() {
     const fp = parseFloat(sellPrice) || 0;
-    setArticles(p => p.map(a => a.id === sellModal.id ? { ...a, venduto: true, prezzoVendita: fp, dataVendita: new Date().toISOString() } : a));
+    setArticles((p) => p.map((a) => a.id === sellModal.id ? { ...a, venduto: true, prezzoVendita: fp, dataVendita: new Date().toISOString() } : a));
     setSellModal(null); setSellPrice(""); showToast("Venduto! 🎉");
   }
 
   function deleteArticle(id) {
-    const item = articles.find(a => a.id === id);
-    if (item?.venduto) setArchive(p => [...p, item]);
-    setArticles(p => p.filter(a => a.id !== id));
-    showToast(item?.venduto ? "Archiviato" : "Eliminato", item?.venduto ? "ok" : "err");
+    const item = articles.find((a) => a.id === id);
+    if (item?.venduto) setArchive((p) => [...p, item]);
+    setArticles((p) => p.filter((a) => a.id !== id));
+    showToast(item?.venduto ? "Archiviato (stats mantenute)" : "Eliminato", item?.venduto ? "ok" : "err");
   }
 
   function handleReset() {
-    Object.values(KEYS).forEach(k => localStorage.removeItem(k));
-    setArticles([]); setArchive([]); setCustomBrands([]); setCheckHistory([]);
-    setShowReset(false); showToast("Tutto azzerato");
+    localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(ARCHIVE_KEY); localStorage.removeItem(CUSTOM_BRANDS_KEY);
+    setArticles([]); setArchive([]); setCustomBrands([]); setShowReset(false); showToast("Tutto azzerato");
+  }
+
+  function saveCustomBrand() {
+    if (!brandForm.name.trim()) { showToast("Inserisci il nome del brand!", "err"); return; }
+    const b = {
+      ...brandForm, name: brandForm.name.trim(), custom: true,
+      id: editingBrand?.id || genId(),
+      margine: parseInt(brandForm.margine) || 70,
+      domanda: parseInt(brandForm.domanda) || 3,
+      difficoltaNum: parseInt(brandForm.difficoltaNum) || 2,
+      cosaMeglio: [], cosaEvitare: [],
+      taglieTop: [], stagione: "", difficolta: "",
+      rischioFalsi: "basso", controlloFalsi: ["Nessuna info — aggiungi le tue note"],
+    };
+    if (editingBrand) {
+      setCustomBrands((p) => p.map((x) => x.id === editingBrand.id ? b : x));
+      if (selectedBrand?.id === editingBrand.id) setSelectedBrand(b);
+    } else {
+      setCustomBrands((p) => [...p, b]);
+    }
+    setShowAddBrand(false); setEditingBrand(null);
+    setBrandForm({ name: "", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 2, note: "", source: "", prezzo: "", prezzoVendita: "", consiglio: "" });
+    showToast(editingBrand ? "Brand aggiornato!" : "Brand aggiunto!");
+  }
+
+  function deleteCustomBrand(id) {
+    setCustomBrands((p) => p.filter((b) => b.id !== id));
+    setSelectedBrand(null);
+    showToast("Brand eliminato", "err");
+  }
+
+  function startEditBrand(b) {
+    setBrandForm({ name: b.name, domanda: b.domanda, velocita: b.velocita, margine: b.margine, difficoltaNum: b.difficoltaNum, note: b.note || "", source: b.source || "", prezzo: b.prezzo || "", prezzoVendita: b.prezzoVendita || "", consiglio: b.consiglio || "" });
+    setEditingBrand(b); setShowAddBrand(true);
   }
 
   function exportCSV() {
     const all = [...articles, ...archive];
     if (!all.length) { showToast("Nessun dato", "err"); return; }
-    const h = ["Nome","Brand","Categoria","Taglia","Condizione","Costo","Prezzo","Venduto a","Margine","Fonte","Stato","Data Acquisto","Data Vendita"];
-    const rows = all.map(a => { const sp = a.venduto ? (a.prezzoVendita ?? a.prezzo) : a.prezzo; return [a.nome,a.brand,a.categoria,a.taglia,a.condizione||"",a.costo?.toFixed(2),a.prezzo?.toFixed(2),a.venduto?sp.toFixed(2):"",((sp-a.costo)).toFixed(2),a.fonte,a.venduto?"Venduto":"In vendita",a.dataAcquisto?new Date(a.dataAcquisto).toLocaleDateString("it-IT"):"",a.dataVendita?new Date(a.dataVendita).toLocaleDateString("it-IT"):""].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(","); });
-    const blob = new Blob(["\uFEFF"+[h.join(","),...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
-    const u = URL.createObjectURL(blob); const el = document.createElement("a"); el.href = u;
-    el.download = `resell-hub-${new Date().toISOString().slice(0,10)}.csv`; el.click(); URL.revokeObjectURL(u); showToast("CSV scaricato!");
-  }
-
-  function saveCustomBrand() {
-    if (!brandForm.name.trim()) { showToast("Inserisci il nome!", "err"); return; }
-    const b = { ...brandForm, name: brandForm.name.trim(), custom: true, id: editingBrand?.id || genId(), margine: parseInt(brandForm.margine)||70, domanda: parseInt(brandForm.domanda)||3, difficoltaNum: parseInt(brandForm.difficoltaNum)||2, cosaMeglio: [], cosaEvitare: [], taglieTop: [], stagione: "", difficolta: "", rischioFalsi: "basso", controlloFalsi: [] };
-    if (editingBrand) { setCustomBrands(p => p.map(x => x.id === editingBrand.id ? b : x)); if (selectedBrand?.id === editingBrand.id) setSelectedBrand(b); }
-    else setCustomBrands(p => [...p, b]);
-    setShowAddBrand(false); setEditingBrand(null);
-    setBrandForm({ name: "", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 2, note: "", source: "", prezzo: "", prezzoVendita: "", consiglio: "" });
-    showToast(editingBrand ? "Aggiornato!" : "Aggiunto!");
+    const h = ["Nome","Brand","Categoria","Taglia","Condizione","Genere","Costo","Prezzo Listino","Prezzo Vendita","Margine","Margine%","Fonte","Stato","Data Acquisto","Data Vendita","Note"];
+    const rows = all.map((a) => {
+      const sp = a.venduto ? (a.prezzoVendita ?? a.prezzo) : a.prezzo;
+      const m = sp - a.costo; const pct = a.costo > 0 ? ((m / a.costo) * 100).toFixed(1) : "0";
+      return [a.nome,a.brand,a.categoria,a.taglia,a.condizione||"",a.genere||"",a.costo.toFixed(2),a.prezzo.toFixed(2),a.venduto?sp.toFixed(2):"",m.toFixed(2),pct+"%",a.fonte,a.venduto?"Venduto":"In vendita",a.dataAcquisto?new Date(a.dataAcquisto).toLocaleDateString("it-IT"):"",a.dataVendita?new Date(a.dataVendita).toLocaleDateString("it-IT"):"",a.note||""].map((v)=>`"${String(v).replace(/"/g,'""')}"`).join(",");
+    });
+    const csv = "\uFEFF" + [h.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const el = document.createElement("a"); el.href = url;
+    el.download = `resell-hub-${new Date().toISOString().slice(0,10)}.csv`;
+    el.click(); URL.revokeObjectURL(url); showToast("CSV scaricato!");
   }
 
   /* ─── COMPUTED ─── */
-  const venduti = articles.filter(a => a.venduto);
-  const inVendita = articles.filter(a => !a.venduto);
+  const venduti = articles.filter((a) => a.venduto);
+  const inVendita = articles.filter((a) => !a.venduto);
   const allSold = [...venduti, ...archive];
   const totGuadagno = allSold.reduce((s, a) => s + getMargin(a), 0);
   const totInvestito = allSold.reduce((s, a) => s + a.costo, 0);
+  const totInvestitoTutto = articles.reduce((s, a) => s + a.costo, 0) + archive.reduce((s, a) => s + a.costo, 0);
   const roi = totInvestito > 0 ? ((totGuadagno / totInvestito) * 100).toFixed(0) : 0;
 
-  // Monthly goal progress
-  const now = new Date();
-  const thisMonthSold = allSold.filter(a => { const d = new Date(a.dataVendita || a.dataAcquisto); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
-  const thisMonthProfit = thisMonthSold.reduce((s, a) => s + getMargin(a), 0);
-  const goalPct = monthlyGoal > 0 ? Math.min(100, (thisMonthProfit / monthlyGoal) * 100) : 0;
+  const monthlyData = (() => {
+    const m = {};
+    allSold.forEach((a) => { const k = getMonthLabel(a.dataVendita || a.dataAcquisto); if (!m[k]) m[k] = { mese: k, profitto: 0 }; m[k].profitto += getMargin(a); });
+    return Object.values(m).slice(-6);
+  })();
 
-  const monthlyData = (() => { const m = {}; allSold.forEach(a => { const k = monthLabel(a.dataVendita || a.dataAcquisto); if (!m[k]) m[k] = { mese: k, p: 0 }; m[k].p += getMargin(a); }); return Object.values(m).slice(-6); })();
+  const catData = (() => {
+    const c = {}; articles.forEach((a) => { c[a.categoria] = (c[a.categoria] || 0) + 1; });
+    return Object.entries(c).map(([name, value]) => ({ name, value }));
+  })();
 
-  const filtered = articles.filter(a => {
+  const sourceData = (() => {
+    const s = {};
+    allSold.forEach((a) => { if (!s[a.fonte]) s[a.fonte] = { fonte: a.fonte, profitto: 0 }; s[a.fonte].profitto += getMargin(a); });
+    return Object.values(s).sort((a, b) => b.profitto - a.profitto).slice(0, 5);
+  })();
+
+  // Filtered & sorted articles
+  const filtered = articles.filter((a) => {
     const q = search.toLowerCase();
-    return (!search || a.nome.toLowerCase().includes(q) || a.brand.toLowerCase().includes(q)) && (filter === "tutti" || (filter === "venduto" && a.venduto) || (filter === "attivo" && !a.venduto));
+    const ms = !search || a.nome.toLowerCase().includes(q) || a.brand.toLowerCase().includes(q);
+    const mf = filter === "tutti" || (filter === "venduto" && a.venduto) || (filter === "in_vendita" && !a.venduto);
+    return ms && mf;
   }).sort((a, b) => {
     if (invSort === "recente") return new Date(b.dataAcquisto) - new Date(a.dataAcquisto);
-    if (invSort === "margine") return getMargin(b) - getMargin(a);
-    if (invSort === "prezzo") return b.prezzo - a.prezzo;
-    return a.nome.localeCompare(b.nome);
+    if (invSort === "margine_alto") return getMargin(b) - getMargin(a);
+    if (invSort === "margine_basso") return getMargin(a) - getMargin(b);
+    if (invSort === "prezzo_alto") return b.prezzo - a.prezzo;
+    if (invSort === "prezzo_basso") return a.prezzo - b.prezzo;
+    if (invSort === "nome") return a.nome.localeCompare(b.nome);
+    return 0;
   });
 
-  const sortedBrands = [...allBrands].filter(b => !brandSearch || b.name.toLowerCase().includes(brandSearch.toLowerCase()))
+  // Sorted brands
+  // All brands (built-in + custom)
+  const allBrands = [...BRANDS, ...customBrands];
+
+  const sortedBrands = [...allBrands].filter((b) => !brandSearch || b.name.toLowerCase().includes(brandSearch.toLowerCase()))
     .sort((a, b) => {
       if (brandSort === "score") return calcScore(b) - calcScore(a);
       if (brandSort === "margine") return b.margine - a.margine;
       if (brandSort === "domanda") return b.domanda - a.domanda;
-      if (brandSort === "velocita") return (VEL_ORDER[a.velocita]||5) - (VEL_ORDER[b.velocita]||5);
+      if (brandSort === "velocita") {
+        const order = { "1-3 giorni": 1, "3-7 giorni": 2, "1-2 settimane": 3, "2-4 settimane": 4 };
+        return (order[a.velocita] || 5) - (order[b.velocita] || 5);
+      }
       return a.name.localeCompare(b.name);
     });
 
-  // Insight data
-  const brandPerf = (() => { const m = {}; allSold.forEach(a => { const b = a.brand || "Altro"; if (!m[b]) m[b] = { brand: b, profit: 0, count: 0 }; m[b].profit += getMargin(a); m[b].count++; }); return Object.values(m).sort((a,b) => b.profit - a.profit); })();
-  const sourcePerf = (() => { const m = {}; allSold.forEach(a => { const s = a.fonte || "Altro"; if (!m[s]) m[s] = { fonte: s, profit: 0, count: 0 }; m[s].profit += getMargin(a); m[s].count++; }); return Object.values(m).sort((a,b) => b.profit - a.profit); })();
-  const checksThisMonth = checkHistory.filter(c => { const d = new Date(c.date); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
-  const checksBought = checksThisMonth.filter(c => c.bought).length;
-  const checksSkipped = checksThisMonth.filter(c => !c.bought).length;
-
-  // Brand search for checklist
-  const ckBrandResults = ckBrandText.length >= 1 ? allBrands.filter(b => b.name.toLowerCase().includes(ckBrandText.toLowerCase())).slice(0, 5) : [];
+  const costoNum = parseFloat(form.costo) || 0;
+  const prezzoNum = parseFloat(form.prezzo) || 0;
+  const previewMargin = prezzoNum - costoNum;
+  const previewPct = costoNum > 0 ? ((previewMargin / costoNum) * 100).toFixed(0) : null;
 
   /* ─── RENDER ─── */
   return (
     <div style={S.app}>
       {/* HEADER */}
       <header style={S.header}>
-        <div><h1 style={S.logo}>Resell Hub</h1><span style={S.sub}>v3.0</span></div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={exportCSV} style={S.hBtn} title="CSV"><Download size={14} /></button>
-          <button onClick={() => setShowReset(true)} style={S.hBtn} title="Reset"><RotateCcw size={14} /></button>
+        <div>
+          <h1 style={S.logo}>Resell Hub</h1>
+          <span style={S.version}>Vinted Tracker v2.3</span>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={exportCSV} style={S.headerBtn} title="Esporta CSV"><Download size={15} /></button>
+          <button onClick={() => setShowReset(true)} style={S.headerBtn} title="Azzera tutto"><RotateCcw size={15} /></button>
         </div>
       </header>
 
-      <main style={S.main}>
+      {/* INSTALL BANNER */}
+      {showInstallBanner && (
+        <div style={S.installBanner}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+            <Smartphone size={16} style={{ color: "var(--accent)", flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: "var(--text2)" }}>Installa Resell Hub come app</span>
+          </div>
+          <button onClick={handleInstall} style={S.installBtn}>Installa</button>
+          <button onClick={() => setShowInstallBanner(false)} style={{ background: "none", border: "none", color: "var(--dim)", cursor: "pointer", fontSize: 16, padding: "0 4px" }}>✕</button>
+        </div>
+      )}
 
+      <main style={S.content}>
         {/* ═══ DASHBOARD ═══ */}
-        {tab === "dash" && <div style={S.fade}>
-          {/* Stats */}
-          <div style={S.row}>
-            {[{ l: "Profitto", v: fmt(totGuadagno), c: totGuadagno >= 0 ? "#4ade80" : "#f87171" },
-              { l: "Venduti", v: allSold.length, c: "#4ade80" },
-              { l: "In vendita", v: inVendita.length, c: "#fbbf24" },
-              { l: "ROI", v: roi + "%", c: "#60a5fa" }
-            ].map((s, i) => <div key={i} style={S.stat}><div style={{ fontSize: 18, fontWeight: 500, color: s.c, fontFamily: "'Playfair Display', serif" }}>{s.v}</div><div style={S.statL}>{s.l}</div></div>)}
-          </div>
-
-          {/* Monthly goal */}
-          <div style={S.card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 10, color: "#6a6a72", letterSpacing: 1, textTransform: "uppercase" }}>Obiettivo mensile</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <input type="number" value={monthlyGoal} onChange={e => setMonthlyGoal(parseInt(e.target.value) || 0)}
-                  style={{ width: 60, background: "#26262d", border: "1px solid #2e2e38", color: "#f0ede8", fontSize: 12, padding: "3px 6px", borderRadius: 4, textAlign: "right", outline: "none", fontFamily: "'DM Mono', monospace" }} />
-                <span style={{ fontSize: 11, color: "#6a6a72" }}>€</span>
+        {tab === "dashboard" && (
+          <div style={{ animation: "fadeIn 0.3s ease" }}>
+            <div style={S.statsRow}>
+              <StatCard label="Articoli" value={articles.length} color="var(--accent)" />
+              <StatCard label="Venduti" value={allSold.length} color="var(--green)" tip="Totale venduti (inclusi archiviati)" />
+              <StatCard label="In vendita" value={inVendita.length} color="var(--yellow)" />
+              <StatCard label="ROI" value={roi + "%"} color="#60a5fa" tip="Return on Investment: quanto guadagni per ogni euro investito" />
+            </div>
+            <div style={S.statsRow}>
+              <BigStat label="Profitto netto" value={formatEur(totGuadagno)} color={totGuadagno >= 0 ? "var(--green)" : "var(--red)"} tip="Totale guadagni meno totale costi su tutti gli articoli venduti" />
+              <BigStat label="Investito totale" value={totInvestitoTutto.toFixed(2) + "€"} color="var(--accent)" tip="Somma di tutti i costi di acquisto" />
+            </div>
+            {monthlyData.length > 0 && (
+              <div style={S.card}>
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <SectionTitle>Profitto mensile</SectionTitle>
+                </div>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={monthlyData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="mese" tick={{ fill: "#999", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "#999", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: "#999" }} formatter={(v) => [v.toFixed(2) + "€", "Profitto"]} />
+                    <Bar dataKey="profitto" radius={[3, 3, 0, 0]}>
+                      {monthlyData.map((e, i) => <Cell key={i} fill={e.profitto >= 0 ? "#4ade80" : "#f87171"} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            </div>
-            <div style={{ height: 6, background: "#26262d", borderRadius: 3, overflow: "hidden", marginBottom: 6 }}>
-              <div style={{ height: "100%", borderRadius: 3, width: `${goalPct}%`, background: goalPct >= 100 ? "#4ade80" : "#d4f55e", transition: "width 0.3s" }} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-              <span style={{ color: thisMonthProfit >= 0 ? "#4ade80" : "#f87171", fontWeight: 500 }}>{thisMonthProfit.toFixed(2)}€</span>
-              <span style={{ color: "#6a6a72" }}>
-                {goalPct >= 100 ? "🎉 Obiettivo raggiunto!" : `Manca ${(monthlyGoal - thisMonthProfit).toFixed(2)}€`}
-              </span>
-            </div>
-          </div>
-
-          {/* Chart */}
-          {monthlyData.length > 0 && <div style={S.card}>
-            <div style={S.secTitle}>Profitto mensile</div>
-            <ResponsiveContainer width="100%" height={150}>
-              <BarChart data={monthlyData} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
-                <XAxis dataKey="mese" tick={{ fill: "#9a9a9a", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#9a9a9a", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={ttStyle} formatter={v => [v.toFixed(2) + "€"]} />
-                <Bar dataKey="p" radius={[3,3,0,0]}>{monthlyData.map((e,i) => <Cell key={i} fill={e.p >= 0 ? "#4ade80" : "#f87171"} />)}</Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>}
-
-          {articles.length === 0 && <div style={S.empty}><div style={{ fontSize: 32, marginBottom: 8 }}>📦</div><div style={{ fontSize: 12, color: "#6a6a72" }}>Nessun articolo — usa la Checklist per iniziare</div></div>}
-        </div>}
-
-        {/* ═══ CHECKLIST ═══ */}
-        {tab === "check" && <div style={S.fade}>
-          {/* Progress */}
-          <div style={{ display: "flex", gap: 4, marginBottom: 20 }}>
-            {[0,1,2,3,4].map(i => <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i <= ckStep ? "#d4f55e" : "#26262d", transition: "background 0.2s" }} />)}
-          </div>
-
-          {/* STEP 0: Brand */}
-          {ckStep === 0 && <div>
-            <div style={S.ckTitle}>Che brand è?</div>
-            <input value={ckBrandText} onChange={e => { setCkBrandText(e.target.value); setCkBrand(null); }} placeholder="Scrivi il nome del brand..." style={S.input} autoFocus />
-            {ckBrandResults.length > 0 && <div style={{ marginTop: 6 }}>
-              {ckBrandResults.map(b => <button key={b.custom ? b.id : b.name} onClick={() => { setCkBrand(b); setCkBrandText(b.name); setCkStep(1); }}
-                style={{ ...S.ckOption, borderColor: ckBrand?.name === b.name ? "#d4f55e" : "#2e2e38" }}>
-                <span style={{ fontWeight: 500 }}>{b.name}</span>
-                <span style={{ fontSize: 10, color: "#6a6a72" }}>Margine {b.margine}% · <Dots n={b.domanda} /></span>
-              </button>)}
-            </div>}
-            {ckBrandText.length >= 2 && ckBrandResults.length === 0 && <div style={{ marginTop: 8, fontSize: 12, color: "#6a6a72" }}>Brand non nel database. Puoi aggiungerlo dalla sezione Brand.</div>}
-          </div>}
-
-          {/* STEP 1: Categoria + Taglia */}
-          {ckStep === 1 && <div>
-            <div style={S.ckTitle}>Che articolo è?</div>
-            <div style={S.ckLabel}>Categoria</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
-              {CATEGORIE.map(c => <button key={c} onClick={() => setCkCat(c)} style={{ ...S.chip, ...(ckCat === c ? S.chipActive : {}) }}>{c}</button>)}
-            </div>
-            <div style={S.ckLabel}>Taglia</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-              {TAGLIE.slice(0, 10).map(t => <button key={t} onClick={() => setCkTaglia(t)} style={{ ...S.chip, ...(ckTaglia === t ? S.chipActive : {}) }}>{t}</button>)}
-            </div>
-            <button onClick={() => setCkStep(2)} style={S.ckNext}>Avanti →</button>
-          </div>}
-
-          {/* STEP 2: Condizione */}
-          {ckStep === 2 && <div>
-            <div style={S.ckTitle}>In che condizioni è?</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {CONDIZIONI.map(c => <button key={c} onClick={() => { setCkCond(c); setCkStep(3); }} style={{ ...S.ckOption, borderColor: ckCond === c ? "#d4f55e" : "#2e2e38" }}>{c}</button>)}
-            </div>
-          </div>}
-
-          {/* STEP 3: Prezzo */}
-          {ckStep === 3 && <div>
-            <div style={S.ckTitle}>Quanto te lo vendono?</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <input type="number" value={ckCosto} onChange={e => setCkCosto(e.target.value)} placeholder="0.00" step="0.01" min="0" style={{ ...S.input, fontSize: 24, textAlign: "center", padding: 14 }} autoFocus />
-              <span style={{ fontSize: 18, color: "#6a6a72" }}>€</span>
-            </div>
-            <button onClick={() => { if (parseFloat(ckCosto) > 0) runEvaluation(); else showToast("Inserisci il prezzo!", "err"); }} style={S.ckNext}>Valuta →</button>
-          </div>}
-
-          {/* STEP 4: Skip (not used, runEvaluation goes to 5) */}
-
-          {/* STEP 5: Result */}
-          {ckStep === 5 && ckResult && <div>
-            {/* Verdict */}
-            <div style={{ textAlign: "center", padding: "20px 0 16px" }}>
-              <div style={{ fontSize: 40, fontWeight: 700, color: ckResult.verdictColor, fontFamily: "'Playfair Display', serif", marginBottom: 4 }}>{ckResult.verdictLabel}</div>
-              <div style={{ fontSize: 12, color: "#9a9a9a" }}>{ckBrand.name} · {ckCat} · Tg. {ckTaglia} · {ckCond}</div>
-            </div>
-
-            {/* Numbers */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              <div style={{ ...S.card, flex: 1, textAlign: "center", marginBottom: 0 }}>
-                <div style={{ fontSize: 9, color: "#6a6a72", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Compri a</div>
-                <div style={{ fontSize: 18, fontWeight: 500, color: "#f87171" }}>{parseFloat(ckCosto).toFixed(2)}€</div>
-              </div>
-              <div style={{ ...S.card, flex: 1, textAlign: "center", marginBottom: 0 }}>
-                <div style={{ fontSize: 9, color: "#6a6a72", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Rivendi a ~</div>
-                <div style={{ fontSize: 18, fontWeight: 500, color: "#4ade80" }}>{ckResult.prezzoStimato.toFixed(2)}€</div>
-              </div>
-              <div style={{ ...S.card, flex: 1, textAlign: "center", marginBottom: 0 }}>
-                <div style={{ fontSize: 9, color: "#6a6a72", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Margine</div>
-                <div style={{ fontSize: 18, fontWeight: 500, color: ckResult.margine >= 0 ? "#4ade80" : "#f87171" }}>{ckResult.marginePct}%</div>
-              </div>
-            </div>
-
-            {/* Pro/Contro */}
-            {ckResult.pro.length > 0 && <div style={{ ...S.card, marginBottom: 8 }}>
-              {ckResult.pro.map((p, i) => <div key={i} style={{ fontSize: 12, color: "#4ade80", marginBottom: 4 }}>✓ {p}</div>)}
-            </div>}
-            {ckResult.contro.length > 0 && <div style={{ ...S.card, marginBottom: 8 }}>
-              {ckResult.contro.map((c, i) => <div key={i} style={{ fontSize: 12, color: "#f87171", marginBottom: 4 }}>✗ {c}</div>)}
-            </div>}
-
-            {/* Action buttons */}
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <button onClick={ckSkip} style={{ ...S.btn, flex: 1, background: "#26262d", color: "#9a9a9a", border: "1px solid #2e2e38" }}>Lo salto</button>
-              <button onClick={ckBuy} style={{ ...S.btn, flex: 1, background: "#4ade80", color: "#000" }}>Lo compro ✓</button>
-            </div>
-            <button onClick={resetChecklist} style={{ ...S.btn, width: "100%", marginTop: 8, background: "transparent", color: "#6a6a72", border: "1px solid #2e2e38" }}>Nuova valutazione</button>
-          </div>}
-
-          {/* Back button */}
-          {ckStep > 0 && ckStep < 5 && <button onClick={() => setCkStep(ckStep - 1)} style={{ ...S.btn, marginTop: 12, background: "transparent", color: "#6a6a72", border: "1px solid #2e2e38", width: "100%" }}>← Indietro</button>}
-        </div>}
-
-        {/* ═══ INVENTARIO ═══ */}
-        {tab === "inv" && <div style={S.fade}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
-            <div style={{ position: "relative", flex: 1 }}>
-              <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#6a6a72" }} />
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca..." style={{ ...S.input, paddingLeft: 30 }} />
-            </div>
-            <Sort value={invSort} onChange={setInvSort} options={[{ v: "recente", l: "Recenti" }, { v: "margine", l: "Margine ↑" }, { v: "prezzo", l: "Prezzo ↑" }, { v: "nome", l: "A-Z" }]} />
-          </div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-            {[{ k: "tutti", l: "Tutti", c: articles.length }, { k: "attivo", l: "In vendita", c: inVendita.length }, { k: "venduto", l: "Venduti", c: venduti.length }].map(f =>
-              <button key={f.k} onClick={() => setFilter(f.k)} style={{ ...S.chip, ...(filter === f.k ? S.chipActive : {}) }}>{f.l} ({f.c})</button>
             )}
-            <button onClick={() => setShowManualAdd(true)} style={{ ...S.chip, color: "#d4f55e", borderColor: "#d4f55e44" }}>+ Manuale</button>
-          </div>
-
-          {filtered.length === 0 ? <div style={S.empty}><div style={{ fontSize: 12, color: "#6a6a72" }}>Nessun articolo</div></div> :
-            filtered.map((a, i) => {
-              const m = getMargin(a); const base = a.venduto ? (a.prezzoVendita ?? a.prezzo) : a.prezzo;
-              return <div key={a.id} style={S.artCard}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: "#f0ede8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.nome}</span>
-                    <span style={{ fontSize: 8, padding: "1px 6px", borderRadius: 3, letterSpacing: 1, textTransform: "uppercase", ...(a.venduto ? { background: "#0d3320", color: "#4ade80" } : { background: "#33300d", color: "#fbbf24" }) }}>{a.venduto ? "Venduto" : "Attivo"}</span>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              {catData.length > 0 && (
+                <div style={{ ...S.card, flex: "1 1 200px" }}>
+                  <SectionTitle>Per categoria</SectionTitle>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <PieChart><Pie data={catData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" stroke="none">
+                      {catData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie><Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [v, n]} /></PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                    {catData.map((c, i) => <span key={i} style={{ fontSize: 10, color: PIE_COLORS[i % PIE_COLORS.length] }}>● {c.name}</span>)}
                   </div>
-                  <div style={{ fontSize: 10, color: "#6a6a72" }}>{a.brand} · {a.categoria} · {a.taglia}{a.fonte ? ` · ${a.fonte}` : ""}</div>
                 </div>
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 500, color: m >= 0 ? "#4ade80" : "#f87171" }}>{fmt(m)}</div>
-                  <div style={{ fontSize: 9, color: "#6a6a72" }}>{a.costo.toFixed(2)}→{base.toFixed(2)}</div>
+              )}
+              {sourceData.length > 0 && (
+                <div style={{ ...S.card, flex: "1 1 200px" }}>
+                  <SectionTitle>Top fonti</SectionTitle>
+                  {sourceData.map((s, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: i < sourceData.length - 1 ? "1px solid var(--border)" : "none" }}>
+                      <span style={{ fontSize: 12, color: "var(--text2)" }}>{s.fonte}</span>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "var(--green)" }}>{formatEur(s.profitto)}</span>
+                    </div>
+                  ))}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0 }}>
-                  {!a.venduto && <button onClick={() => { setSellModal({ id: a.id, prezzoOriginale: a.prezzo }); setSellPrice(String(a.prezzo)); }} style={S.actG}><Check size={13} /></button>}
-                  <button onClick={() => deleteArticle(a.id)} style={S.actD}><Trash2 size={11} /></button>
-                </div>
-              </div>;
-            })
-          }
-        </div>}
-
-        {/* ═══ BRAND GUIDE (list) ═══ */}
-        {tab === "brand" && !selectedBrand && <div style={S.fade}>
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
-            <div style={{ position: "relative", flex: 1 }}>
-              <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#6a6a72" }} />
-              <input value={brandSearch} onChange={e => setBrandSearch(e.target.value)} placeholder="Cerca brand..." style={{ ...S.input, paddingLeft: 30 }} />
-            </div>
-            <Sort value={brandSort} onChange={setBrandSort} options={[{ v: "score", l: "Score ↑" }, { v: "margine", l: "Margine ↑" }, { v: "domanda", l: "Domanda ↑" }, { v: "velocita", l: "Veloci" }, { v: "nome", l: "A-Z" }]} />
-          </div>
-          {sortedBrands.map(b => <div key={b.custom ? b.id : b.name} onClick={() => { setSelectedBrand(b); setBrandTab("comprare"); }} style={{ ...S.bRow, cursor: "pointer" }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                <span style={{ fontSize: 14, fontWeight: 500, color: "#f0ede8" }}>{b.name}</span>
-                {b.custom && <span style={{ fontSize: 7, padding: "1px 5px", borderRadius: 3, background: "rgba(212,245,94,0.12)", color: "#d4f55e", letterSpacing: 1 }}>TUO</span>}
-              </div>
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}><Dots n={b.domanda} /> <span style={{ fontSize: 10, color: b.velocita === "1-3 giorni" ? "#4ade80" : b.velocita === "3-7 giorni" ? "#fbbf24" : "#f87171" }}>{b.velocita}</span></div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ textAlign: "right" }}><div style={{ fontSize: 18, fontWeight: 500, color: "#d4f55e", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{calcScore(b)}</div><div style={{ fontSize: 7, color: "#6a6a72", letterSpacing: 1 }}>/ 10</div></div>
-              <ChevronRight size={14} style={{ color: "#6a6a72" }} />
-            </div>
-          </div>)}
-          <button onClick={() => { setShowAddBrand(true); setEditingBrand(null); setBrandForm({ name: "", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 2, note: "", source: "", prezzo: "", prezzoVendita: "", consiglio: "" }); }} style={{ ...S.bRow, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: "#d4f55e", border: "1px dashed #2e2e38" }}>
-            <PlusCircle size={14} /> <span style={{ fontSize: 11 }}>Aggiungi brand</span>
-          </button>
-        </div>}
-
-        {/* ═══ BRAND DETAIL ═══ */}
-        {tab === "brand" && selectedBrand && (() => {
-          const b = selectedBrand; const bn = b.name.toLowerCase();
-          const myItems = articles.filter(a => a.brand.toLowerCase() === bn);
-          const mySold = [...myItems.filter(a => a.venduto), ...archive.filter(a => a.brand.toLowerCase() === bn)];
-          const myProfit = mySold.reduce((s, a) => s + getMargin(a), 0);
-          const fc = b.rischioFalsi === "alto" ? "#f87171" : b.rischioFalsi === "medio" ? "#fbbf24" : "#4ade80";
-          return <div style={S.fade}>
-            <button onClick={() => setSelectedBrand(null)} style={S.back}><ArrowLeft size={14} /> Tutti i brand</button>
-            <h2 style={{ fontSize: 24, fontFamily: "'Playfair Display', serif", color: "#f0ede8", marginBottom: 2 }}>{b.name}</h2>
-            {b.note && <div style={{ fontSize: 11, color: "#9a9a9a", marginBottom: 8 }}>{b.note}</div>}
-            <a href={`https://www.vinted.it/catalog?search_text=${encodeURIComponent(b.name)}`} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "#d4f55e", textDecoration: "none", marginBottom: 16 }}><ExternalLink size={12} /> Cerca su Vinted</a>
-
-            {/* BLOCK 1 */}
-            <div style={S.secTitle}>Vale la pena?</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              <div style={{ ...S.card, flex: "0 0 80px", textAlign: "center", marginBottom: 0, background: "rgba(212,245,94,0.05)", borderColor: "rgba(212,245,94,0.12)" }}>
-                <div style={{ fontSize: 8, color: "#d4f55e", letterSpacing: 1, marginBottom: 2 }}>SCORE</div>
-                <div style={{ fontSize: 28, fontWeight: 500, color: "#d4f55e", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{calcScore(b)}</div>
-                <div style={{ fontSize: 8, color: "#6a6a72" }}>/ 10</div>
-              </div>
-              <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                <div style={S.miniStat}><div style={S.miniL}>Margine</div><div style={{ fontSize: 16, fontWeight: 500, color: "#d4f55e" }}>{b.margine}%</div></div>
-                <div style={S.miniStat}><div style={S.miniL}>Vendita</div><div style={{ fontSize: 12, fontWeight: 500, color: b.velocita === "1-3 giorni" ? "#4ade80" : b.velocita === "3-7 giorni" ? "#fbbf24" : "#f87171" }}>{b.velocita}</div></div>
-                <div style={S.miniStat}><div style={S.miniL}>Domanda</div><Dots n={b.domanda} /></div>
-                <div style={S.miniStat}><div style={S.miniL}>Difficoltà</div><div style={{ fontSize: 10, color: "#c8c5be" }}>{b.difficolta || `${b.difficoltaNum}/4`}</div></div>
-              </div>
-            </div>
-            {(b.prezzo || b.prezzoVendita) && <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              {b.prezzo && <div style={{ ...S.miniStat, flex: 1, textAlign: "center" }}><div style={S.miniL}>Compri a</div><div style={{ fontSize: 14, fontWeight: 500, color: "#f87171" }}>{b.prezzo}</div></div>}
-              {b.prezzoVendita && <div style={{ ...S.miniStat, flex: 1, textAlign: "center" }}><div style={S.miniL}>Rivendi a</div><div style={{ fontSize: 14, fontWeight: 500, color: "#4ade80" }}>{b.prezzoVendita}</div></div>}
-            </div>}
-
-            {/* BLOCK 2 */}
-            <div style={S.secTitle}>Come farlo bene</div>
-            <div style={{ display: "flex", gap: 3, marginBottom: 10, background: "#1e1e23", padding: 3, borderRadius: 6, border: "1px solid #2e2e38" }}>
-              {[{ id: "comprare", l: "✅ Comprare" }, { id: "evitare", l: "⛔ Evitare" }, { id: "consigli", l: "💡 Consigli" }].map(t =>
-                <button key={t.id} onClick={() => setBrandTab(t.id)} style={{ flex: 1, padding: "7px 4px", fontSize: 10, border: "none", borderRadius: 4, cursor: "pointer", fontFamily: "'DM Mono', monospace", background: brandTab === t.id ? "#d4f55e" : "transparent", color: brandTab === t.id ? "#000" : "#9a9a9a", fontWeight: brandTab === t.id ? 500 : 400 }}>{t.l}</button>
               )}
             </div>
-            <div style={{ ...S.card, minHeight: 80 }}>
-              {brandTab === "comprare" && <div>
-                {b.cosaMeglio?.length > 0 ? b.cosaMeglio.map((x, i) => <div key={i} style={{ fontSize: 12, color: "#c8c5be", marginBottom: 5, lineHeight: 1.5 }}>• {x}</div>) : <div style={{ fontSize: 11, color: "#6a6a72", fontStyle: "italic" }}>Nessuna info</div>}
-                {(b.taglieTop?.length > 0 || b.source || b.stagione) && <div style={{ borderTop: "1px solid #2e2e38", marginTop: 10, paddingTop: 8, fontSize: 11 }}>
-                  {b.taglieTop?.length > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "#6a6a72" }}>Taglie top</span><span style={{ color: "#c8c5be" }}>{b.taglieTop.join(", ")}</span></div>}
-                  {b.source && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ color: "#6a6a72" }}>Dove</span><span style={{ color: "#c8c5be" }}>{b.source}</span></div>}
-                  {b.stagione && <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: "#6a6a72" }}>Stagione</span><span style={{ color: "#c8c5be" }}>{b.stagione}</span></div>}
-                </div>}
-              </div>}
-              {brandTab === "evitare" && <div>{b.cosaEvitare?.length > 0 ? b.cosaEvitare.map((x, i) => <div key={i} style={{ fontSize: 12, color: "#c8c5be", marginBottom: 5, lineHeight: 1.5 }}>• {x}</div>) : <div style={{ fontSize: 11, color: "#6a6a72", fontStyle: "italic" }}>Nessuna info</div>}</div>}
-              {brandTab === "consigli" && <div>{b.consiglio ? <div style={{ fontSize: 12, color: "#c8c5be", lineHeight: 1.6 }}>{b.consiglio}</div> : <div style={{ fontSize: 11, color: "#6a6a72", fontStyle: "italic" }}>Nessun consiglio</div>}</div>}
+            {articles.length === 0 && <EmptyState icon="📦" title="Nessun articolo ancora" sub='Vai su "+" per aggiungere il tuo primo articolo' />}
+          </div>
+        )}
+
+        {/* ═══ INVENTARIO ═══ */}
+        {tab === "inventario" && (
+          <div style={{ animation: "fadeIn 0.3s ease" }}>
+            <div style={{ position: "relative", marginBottom: 12 }}>
+              <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--dim)" }} />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca..." style={{ ...S.input, paddingLeft: 34 }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {[{ key: "tutti", label: "Tutti", c: articles.length }, { key: "in_vendita", label: "In vendita", c: inVendita.length }, { key: "venduto", label: "Venduti", c: venduti.length }].map((f) => (
+                  <FilterChip key={f.key} active={filter === f.key} onClick={() => setFilter(f.key)}>{f.label} ({f.c})</FilterChip>
+                ))}
+              </div>
+              <SortSelect value={invSort} onChange={setInvSort} options={[
+                { value: "recente", label: "Più recenti" }, { value: "margine_alto", label: "Margine ↑" },
+                { value: "margine_basso", label: "Margine ↓" }, { value: "prezzo_alto", label: "Prezzo ↑" },
+                { value: "prezzo_basso", label: "Prezzo ↓" }, { value: "nome", label: "Nome A-Z" },
+              ]} />
+            </div>
+            {filtered.length === 0 ? <EmptyState icon="🔍" title="Nessun risultato" /> : filtered.map((a, i) => {
+              const margin = getMargin(a);
+              const base = a.venduto ? (a.prezzoVendita ?? a.prezzo) : a.prezzo;
+              const pct = a.costo > 0 ? ((margin / a.costo) * 100).toFixed(0) : "∞";
+              return (
+                <div key={a.id} style={{ ...S.articleCard, animation: `slideUp 0.3s ease ${i * 0.02}s forwards`, opacity: 0 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={S.articleName}>{a.nome}</span>
+                      <StatusBadge venduto={a.venduto} />
+                    </div>
+                    <div style={S.articleMeta}>
+                      {a.brand && <span>{a.brand}</span>}
+                      <span>·</span><span>{a.categoria}</span>
+                      {a.taglia && <><span>·</span><span>{a.taglia}</span></>}
+                      {a.condizione && <><span>·</span><span>{a.condizione}</span></>}
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--dim)", marginTop: 2 }}>
+                      {a.fonte}
+                      {a.venduto && a.prezzoVendita != null && a.prezzoVendita !== a.prezzo && (
+                        <span style={{ color: "var(--yellow)", marginLeft: 6 }}>(listino {a.prezzo.toFixed(2)}€ → venduto {a.prezzoVendita.toFixed(2)}€)</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 500, color: margin >= 0 ? "var(--green)" : "var(--red)" }}>{formatEur(margin)}</div>
+                    <div style={{ fontSize: 10, color: "var(--dim)" }}>{a.costo.toFixed(2)}→{base.toFixed(2)} ({pct}%)</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                    {!a.venduto && <button onClick={() => openSellModal(a)} style={S.btnGreen} title="Vendi"><Check size={14} /></button>}
+                    <button onClick={() => deleteArticle(a.id)} style={S.btnDel} title="Elimina"><Trash2 size={12} /></button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ═══ AGGIUNGI ═══ */}
+        {tab === "aggiungi" && (
+          <div style={{ animation: "fadeIn 0.3s ease", maxWidth: 500 }}>
+            <SectionTitle>Nuovo articolo</SectionTitle>
+            <div style={S.card}>
+              <Field label="Nome articolo" required>
+                <input value={form.nome} onChange={(e) => setForm((p) => ({...p, nome: e.target.value}))} placeholder="es. Felpa Nike L" style={S.input} />
+              </Field>
+              <div style={S.formRow}>
+                <Field label="Brand"><input value={form.brand} onChange={(e) => setForm((p) => ({...p, brand: e.target.value}))} placeholder="Nike" style={S.input} /></Field>
+                <Field label="Taglia"><select value={form.taglia} onChange={(e) => setForm((p) => ({...p, taglia: e.target.value}))} style={S.input}>{TAGLIE.map((t) => <option key={t}>{t}</option>)}</select></Field>
+              </div>
+              <div style={S.formRow}>
+                <Field label="Condizione"><select value={form.condizione} onChange={(e) => setForm((p) => ({...p, condizione: e.target.value}))} style={S.input}>{CONDIZIONI.map((c) => <option key={c}>{c}</option>)}</select></Field>
+                <Field label="Genere"><select value={form.genere} onChange={(e) => setForm((p) => ({...p, genere: e.target.value}))} style={S.input}>{GENERI.map((g) => <option key={g}>{g}</option>)}</select></Field>
+              </div>
+              <div style={S.formRow}>
+                <Field label="Categoria"><select value={form.categoria} onChange={(e) => setForm((p) => ({...p, categoria: e.target.value}))} style={S.input}>{CATEGORIE.map((c) => <option key={c}>{c}</option>)}</select></Field>
+                <Field label="Fonte acquisto"><select value={form.fonte} onChange={(e) => setForm((p) => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map((f) => <option key={f}>{f}</option>)}</select></Field>
+              </div>
+              <div style={S.formRow}>
+                <Field label="Costo acquisto (€)"><input type="number" value={form.costo} onChange={(e) => setForm((p) => ({...p, costo: e.target.value}))} placeholder="0.00" step="0.01" min="0" style={S.input} /></Field>
+                <Field label="Prezzo vendita (€)"><input type="number" value={form.prezzo} onChange={(e) => setForm((p) => ({...p, prezzo: e.target.value}))} placeholder="0.00" step="0.01" min="0" style={S.input} /></Field>
+              </div>
+              {(form.costo || form.prezzo) && (
+                <div style={S.marginPreview}>
+                  <span style={{ color: "var(--muted)" }}>Margine previsto:</span>
+                  <span style={{ fontWeight: 500, color: previewMargin >= 0 ? "var(--green)" : "var(--red)" }}>
+                    {formatEur(previewMargin)}{previewPct !== null && ` (${previewPct}%)`}
+                  </span>
+                </div>
+              )}
+              <Field label="Note (opzionale)">
+                <textarea value={form.note} onChange={(e) => setForm((p) => ({...p, note: e.target.value}))} placeholder="es. Etichetta presente, piccolo difetto..." rows={2} style={{ ...S.input, resize: "vertical", minHeight: 48 }} />
+              </Field>
+              <button onClick={addArticle} style={S.addBtn}>+ Aggiungi articolo</button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ BRAND GUIDE ═══ */}
+        {tab === "brands" && !selectedBrand && (
+          <div style={{ animation: "fadeIn 0.3s ease" }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center" }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--dim)" }} />
+                <input value={brandSearch} onChange={(e) => setBrandSearch(e.target.value)} placeholder="Cerca brand..." style={{ ...S.input, paddingLeft: 34 }} />
+              </div>
+              <SortSelect value={brandSort} onChange={setBrandSort} options={[
+                { value: "score", label: "Punteggio ↑" }, { value: "margine", label: "Margine ↑" }, { value: "domanda", label: "Domanda ↑" },
+                { value: "velocita", label: "Più veloci" }, { value: "nome", label: "Nome A-Z" },
+              ]} />
             </div>
 
-            {/* BLOCK 3 */}
-            <div style={S.secTitle}>Attenzione & dati</div>
-            {b.rischioFalsi && <div style={S.card}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 10, color: "#9a9a9a", letterSpacing: 1, textTransform: "uppercase" }}>⚠️ Rischio falsi</span>
-                <span style={{ fontSize: 10, fontWeight: 500, color: fc, padding: "1px 6px", borderRadius: 3, background: b.rischioFalsi === "alto" ? "#301818" : b.rischioFalsi === "medio" ? "#302a18" : "#183018" }}>{b.rischioFalsi.toUpperCase()}</span>
+            {sortedBrands.map((b, i) => (
+              <div key={b.custom ? b.id : b.name} onClick={() => setSelectedBrand(b)} style={{ ...S.brandRow, cursor: "pointer", animation: `slideUp 0.25s ease ${i * 0.03}s forwards`, opacity: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <span style={{ fontSize: 15, fontWeight: 500, color: "var(--text)" }}>{b.name}</span>
+                      {b.custom && <span style={{ fontSize: 8, padding: "1px 6px", borderRadius: 3, background: "rgba(212,245,94,0.15)", color: "var(--accent)", border: "1px solid rgba(212,245,94,0.2)", letterSpacing: 1, textTransform: "uppercase" }}>Tuo</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <DemandDots level={b.domanda} />
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: b.velocita === "1-3 giorni" ? "var(--green)" : b.velocita === "3-7 giorni" ? "var(--yellow)" : "var(--red)" }}>{b.velocita}</span>
+                      <span style={{ fontSize: 10, color: "var(--dim)" }}>{b.prezzo}</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", display: "flex", alignItems: "center", gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{calcScore(b)}</div>
+                      <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>/ 10</div>
+                    </div>
+                    <ChevronRight size={16} style={{ color: "var(--dim)" }} />
+                  </div>
+                </div>
               </div>
-              {b.controlloFalsi?.map((x, i) => <div key={i} style={{ fontSize: 11, color: "#c8c5be", marginBottom: 4, lineHeight: 1.5 }}>• {x}</div>)}
-            </div>}
-            <div style={S.card}>
-              <div style={{ fontSize: 10, color: "#9a9a9a", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>📊 I tuoi numeri</div>
-              {mySold.length === 0 && myItems.length === 0 ? <div style={{ fontSize: 11, color: "#6a6a72", fontStyle: "italic", textAlign: "center" }}>Nessun dato su {b.name}</div> :
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <div style={{ ...S.miniStat, textAlign: "center" }}><div style={{ fontSize: 16, fontWeight: 500, color: "#f0ede8" }}>{myItems.filter(a => !a.venduto).length}</div><div style={S.miniL}>In vendita</div></div>
-                  <div style={{ ...S.miniStat, textAlign: "center" }}><div style={{ fontSize: 16, fontWeight: 500, color: "#4ade80" }}>{mySold.length}</div><div style={S.miniL}>Venduti</div></div>
-                  <div style={{ ...S.miniStat, textAlign: "center" }}><div style={{ fontSize: 16, fontWeight: 500, color: myProfit >= 0 ? "#4ade80" : "#f87171" }}>{fmt(myProfit)}</div><div style={S.miniL}>Guadagno</div></div>
-                  <div style={{ ...S.miniStat, textAlign: "center" }}><div style={{ fontSize: 16, fontWeight: 500, color: "#c8c5be" }}>{mySold.length > 0 ? (myProfit / mySold.length).toFixed(2) + "€" : "—"}</div><div style={S.miniL}>Media</div></div>
-                </div>}
+            ))}
+
+            {/* Add custom brand button */}
+            <button onClick={() => { setShowAddBrand(true); setEditingBrand(null); setBrandForm({ name: "", domanda: 3, velocita: "3-7 giorni", margine: 70, difficoltaNum: 2, note: "", source: "", prezzo: "", prezzoVendita: "", consiglio: "" }); }} style={{ ...S.brandRow, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "var(--accent)", border: "1px dashed var(--border)", opacity: 1 }}>
+              <PlusCircle size={16} /> <span style={{ fontSize: 12 }}>Aggiungi un tuo brand</span>
+            </button>
+          </div>
+        )}
+
+        {/* ═══ BRAND DETAIL PAGE ═══ */}
+        {tab === "brands" && selectedBrand && (() => {
+          const b = selectedBrand;
+          const score = calcScore(b);
+          const brandName = b.name.toLowerCase();
+          const myItems = articles.filter((a) => a.brand.toLowerCase() === brandName);
+          const mySold = [...myItems.filter((a) => a.venduto), ...archive.filter((a) => a.brand.toLowerCase() === brandName)];
+          const myProfit = mySold.reduce((s, a) => s + getMargin(a), 0);
+          const myAvgMargin = mySold.length > 0 ? (myProfit / mySold.length).toFixed(2) : null;
+          const falsiColor = b.rischioFalsi === "alto" ? "var(--red)" : b.rischioFalsi === "medio" ? "var(--yellow)" : "var(--green)";
+
+          return (
+          <div style={{ animation: "fadeIn 0.2s ease" }}>
+            <button onClick={() => { setSelectedBrand(null); setBrandTab("comprare"); }} style={S.backBtn}>
+              <ArrowLeft size={16} /> Tutti i brand
+            </button>
+
+            {/* ─── NAME + BADGE ─── */}
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h2 style={{ fontSize: 26, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{b.name}</h2>
+                {b.custom && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: "rgba(212,245,94,0.15)", color: "var(--accent)", letterSpacing: 1, textTransform: "uppercase" }}>Tuo</span>}
+              </div>
+              {b.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{b.note}</div>}
             </div>
-            {b.custom && <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button onClick={() => { setBrandForm({ name: b.name, domanda: b.domanda, velocita: b.velocita, margine: b.margine, difficoltaNum: b.difficoltaNum, note: b.note||"", source: b.source||"", prezzo: b.prezzo||"", prezzoVendita: b.prezzoVendita||"", consiglio: b.consiglio||"" }); setEditingBrand(b); setShowAddBrand(true); }} style={{ ...S.btn, flex: 1, background: "#1e1e23", color: "#d4f55e", border: "1px solid #2e2e38" }}>Modifica</button>
-              <button onClick={() => { setCustomBrands(p => p.filter(x => x.id !== b.id)); setSelectedBrand(null); showToast("Eliminato", "err"); }} style={{ ...S.btn, flex: 1, background: "#301818", color: "#f87171", border: "1px solid #f8717133" }}>Elimina</button>
-            </div>}
-          </div>;
+
+            {/* Vinted link */}
+            <a href={`https://www.vinted.it/catalog?search_text=${encodeURIComponent(b.name)}`} target="_blank" rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--accent)", fontSize: 11, textDecoration: "none", marginBottom: 18, fontFamily: "'DM Mono', monospace" }}>
+              <ExternalLink size={13} /> Cerca su Vinted
+            </a>
+
+            {/* ━━━━━━ BLOCCO 1 — VALE LA PENA? ━━━━━━ */}
+            <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Vale la pena?</div>
+
+            {/* Score prominent */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <div style={{ ...S.detailMetric, flex: "0 0 auto", minWidth: 90, background: "rgba(212,245,94,0.06)", borderColor: "rgba(212,245,94,0.15)", textAlign: "center" }}>
+                <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Score</div>
+                <div style={{ fontSize: 36, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{score}</div>
+                <div style={{ fontSize: 9, color: "var(--dim)" }}>/ 10</div>
+              </div>
+              <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>Margine</div>
+                  <div style={{ fontSize: 20, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{b.margine}%</div>
+                </div>
+                <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>Vendita</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, marginTop: 2, color: b.velocita === "1-3 giorni" ? "var(--green)" : b.velocita === "3-7 giorni" ? "var(--yellow)" : "var(--red)" }}>{b.velocita}</div>
+                </div>
+                <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>Domanda</div>
+                  <div style={{ marginTop: 4 }}><DemandDots level={b.domanda} /></div>
+                </div>
+                <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>Difficoltà</div>
+                  <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>{b.difficolta || `${b.difficoltaNum}/4`}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Prices side by side */}
+            {(b.prezzo || b.prezzoVendita) && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                {b.prezzo && <div style={{ ...S.detailMetric, flex: 1, textAlign: "center" }}>
+                  <div style={S.detailMetricLabel}>💰 Compri a</div>
+                  <div style={{ fontSize: 16, fontWeight: 500, color: "var(--red)" }}>{b.prezzo}</div>
+                </div>}
+                {b.prezzoVendita && <div style={{ ...S.detailMetric, flex: 1, textAlign: "center" }}>
+                  <div style={S.detailMetricLabel}>💸 Rivendi a</div>
+                  <div style={{ fontSize: 16, fontWeight: 500, color: "var(--green)" }}>{b.prezzoVendita}</div>
+                </div>}
+              </div>
+            )}
+
+            {/* ━━━━━━ BLOCCO 2 — COME FARLO BENE ━━━━━━ */}
+            <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Come farlo bene</div>
+
+            {/* Internal tabs */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 12, background: "var(--surface)", padding: 3, borderRadius: 6, border: "1px solid var(--border)" }}>
+              {[
+                { id: "comprare", label: "✅ Comprare" },
+                { id: "evitare", label: "⛔ Evitare" },
+                { id: "consigli", label: "💡 Consigli" },
+              ].map((t) => (
+                <button key={t.id} onClick={() => setBrandTab(t.id)} style={{
+                  flex: 1, padding: "8px 4px", fontSize: 10, border: "none", borderRadius: 4, cursor: "pointer",
+                  fontFamily: "'DM Mono', monospace", transition: "all 0.15s", letterSpacing: 0.5,
+                  background: brandTab === t.id ? "var(--accent)" : "transparent",
+                  color: brandTab === t.id ? "#000" : "var(--muted)",
+                  fontWeight: brandTab === t.id ? 500 : 400,
+                }}>{t.label}</button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            <div style={{ ...S.card, marginBottom: 20, minHeight: 120 }}>
+              {brandTab === "comprare" && (
+                <div style={{ animation: "fadeIn 0.2s ease" }}>
+                  {b.cosaMeglio?.length > 0 ? b.cosaMeglio.map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
+                      <span style={{ color: "var(--green)", fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>•</span>
+                      <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>{item}</span>
+                    </div>
+                  )) : <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessuna info — {b.custom ? "modifica il brand per aggiungere" : "info non disponibile"}</div>}
+
+                  {/* Taglie + Stagione + Dove trovarlo inline */}
+                  {(b.taglieTop?.length > 0 || b.stagione || b.source) && (
+                    <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
+                      {b.taglieTop?.length > 0 && <DetailRow label="Taglie top" value={b.taglieTop.join(", ")} />}
+                      {b.source && <DetailRow label="Dove trovarlo" value={b.source} />}
+                      {b.stagione && <DetailRow label="Stagione" value={b.stagione} />}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {brandTab === "evitare" && (
+                <div style={{ animation: "fadeIn 0.2s ease" }}>
+                  {b.cosaEvitare?.length > 0 ? b.cosaEvitare.map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
+                      <span style={{ color: "var(--red)", fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>•</span>
+                      <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>{item}</span>
+                    </div>
+                  )) : <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessuna info</div>}
+                </div>
+              )}
+
+              {brandTab === "consigli" && (
+                <div style={{ animation: "fadeIn 0.2s ease" }}>
+                  {b.consiglio ? (
+                    <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.7 }}>{b.consiglio}</div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessun consiglio — {b.custom ? "modifica il brand per aggiungere" : "info non disponibile"}</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ━━━━━━ BLOCCO 3 — ATTENZIONE + I TUOI DATI ━━━━━━ */}
+            <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Attenzione & dati</div>
+
+            {/* Rischio falsi */}
+            {b.rischioFalsi && (
+              <div style={{ ...S.card, marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--muted)" }}>⚠️ Rischio falsi</div>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: falsiColor, padding: "2px 8px", borderRadius: 4, background: b.rischioFalsi === "alto" ? "#301818" : b.rischioFalsi === "medio" ? "#302a18" : "#183018", border: `1px solid ${falsiColor}33` }}>
+                    {b.rischioFalsi.charAt(0).toUpperCase() + b.rischioFalsi.slice(1)}
+                  </span>
+                </div>
+                {b.controlloFalsi?.map((item, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
+                    <span style={{ color: falsiColor, fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
+                    <span style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Storico personale */}
+            <div style={{ ...S.card, marginBottom: 16 }}>
+              <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>📊 I tuoi numeri su {b.name}</div>
+              {mySold.length === 0 && myItems.length === 0 ? (
+                <div style={{ fontSize: 11, color: "var(--dim)", fontStyle: "italic", textAlign: "center", padding: "10px 0" }}>
+                  Nessun dato — aggiungi articoli {b.name} nel tracker per vedere le tue stats
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{myItems.filter((a) => !a.venduto).length}</div>
+                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>In vendita</div>
+                  </div>
+                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: "var(--green)", fontFamily: "'Playfair Display', serif" }}>{mySold.length}</div>
+                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>Venduti</div>
+                  </div>
+                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: myProfit >= 0 ? "var(--green)" : "var(--red)", fontFamily: "'Playfair Display', serif" }}>{formatEur(myProfit)}</div>
+                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>Guadagno</div>
+                  </div>
+                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: "var(--text2)", fontFamily: "'Playfair Display', serif" }}>{myAvgMargin ? myAvgMargin + "€" : "—"}</div>
+                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>Margine medio</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Edit/Delete for custom brands */}
+            {b.custom && (
+              <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                <button onClick={() => startEditBrand(b)} style={{ ...S.addBtn, background: "var(--surface)", color: "var(--accent)", border: "1px solid var(--border)", flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                  <Pencil size={14} /> Modifica
+                </button>
+                <button onClick={() => deleteCustomBrand(b.id)} style={{ ...S.addBtn, background: "#301818", color: "var(--red)", border: "1px solid #f8717133", flex: 1 }}>
+                  Elimina
+                </button>
+              </div>
+            )}
+          </div>
+          );
         })()}
 
-        {/* ═══ INSIGHT ═══ */}
-        {tab === "insight" && <div style={S.fade}>
-          <div style={S.secTitle}>Questo mese</div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <div style={{ ...S.stat, flex: 1 }}><div style={{ fontSize: 18, fontWeight: 500, color: "#4ade80" }}>{checksBought}</div><div style={S.statL}>Comprati</div></div>
-            <div style={{ ...S.stat, flex: 1 }}><div style={{ fontSize: 18, fontWeight: 500, color: "#f87171" }}>{checksSkipped}</div><div style={S.statL}>Saltati</div></div>
-            <div style={{ ...S.stat, flex: 1 }}><div style={{ fontSize: 18, fontWeight: 500, color: "#d4f55e" }}>{thisMonthSold.length}</div><div style={S.statL}>Venduti</div></div>
+        {/* ═══ ADD/EDIT BRAND MODAL ═══ */}
+        {showAddBrand && (
+          <div style={S.overlay} onClick={() => { setShowAddBrand(false); setEditingBrand(null); }}>
+            <div style={{ ...S.modal, textAlign: "left", maxWidth: 420, maxHeight: "85vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text)", marginBottom: 14 }}>{editingBrand ? "Modifica brand" : "Aggiungi brand"}</div>
+              <Field label="Nome brand" required>
+                <input value={brandForm.name} onChange={(e) => setBrandForm((p) => ({...p, name: e.target.value}))} placeholder="es. Stüssy" style={S.input} />
+              </Field>
+              <div style={S.formRow}>
+                <Field label="Domanda (1-5)"><input type="number" min="1" max="5" value={brandForm.domanda} onChange={(e) => setBrandForm((p) => ({...p, domanda: e.target.value}))} style={S.input} /></Field>
+                <Field label="Margine %"><input type="number" min="0" max="100" value={brandForm.margine} onChange={(e) => setBrandForm((p) => ({...p, margine: e.target.value}))} style={S.input} /></Field>
+              </div>
+              <div style={S.formRow}>
+                <Field label="Velocità vendita">
+                  <select value={brandForm.velocita} onChange={(e) => setBrandForm((p) => ({...p, velocita: e.target.value}))} style={S.input}>
+                    {["1-3 giorni", "3-7 giorni", "1-2 settimane", "2-4 settimane"].map((v) => <option key={v}>{v}</option>)}
+                  </select>
+                </Field>
+                <Field label="Difficoltà (1-4)"><input type="number" min="1" max="4" value={brandForm.difficoltaNum} onChange={(e) => setBrandForm((p) => ({...p, difficoltaNum: e.target.value}))} style={S.input} /></Field>
+              </div>
+              <div style={S.formRow}>
+                <Field label="Prezzo acquisto"><input value={brandForm.prezzo} onChange={(e) => setBrandForm((p) => ({...p, prezzo: e.target.value}))} placeholder="10-30€" style={S.input} /></Field>
+                <Field label="Prezzo vendita"><input value={brandForm.prezzoVendita} onChange={(e) => setBrandForm((p) => ({...p, prezzoVendita: e.target.value}))} placeholder="25-60€" style={S.input} /></Field>
+              </div>
+              <Field label="Dove trovarlo"><input value={brandForm.source} onChange={(e) => setBrandForm((p) => ({...p, source: e.target.value}))} placeholder="Mercatini, Outlet..." style={S.input} /></Field>
+              <Field label="Note"><textarea value={brandForm.note} onChange={(e) => setBrandForm((p) => ({...p, note: e.target.value}))} placeholder="Info generali..." rows={2} style={{ ...S.input, resize: "vertical" }} /></Field>
+              <Field label="Consiglio"><textarea value={brandForm.consiglio} onChange={(e) => setBrandForm((p) => ({...p, consiglio: e.target.value}))} placeholder="Il tuo consiglio principale..." rows={2} style={{ ...S.input, resize: "vertical" }} /></Field>
+              <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                <button onClick={() => { setShowAddBrand(false); setEditingBrand(null); }} style={S.modalCancel}>Annulla</button>
+                <button onClick={saveCustomBrand} style={S.modalConfirm}>{editingBrand ? "Salva" : "Aggiungi"}</button>
+              </div>
+            </div>
           </div>
+        )}
 
-          {brandPerf.length > 0 && <div style={S.card}>
-            <div style={S.secTitle}>Brand migliori</div>
-            {brandPerf.slice(0, 5).map((b, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < Math.min(brandPerf.length, 5) - 1 ? "1px solid #2e2e38" : "none" }}>
-              <span style={{ fontSize: 12, color: "#c8c5be" }}>{b.brand} ({b.count})</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: "#4ade80" }}>{fmt(b.profit)}</span>
-            </div>)}
-          </div>}
-
-          {sourcePerf.length > 0 && <div style={S.card}>
-            <div style={S.secTitle}>Fonti migliori</div>
-            {sourcePerf.slice(0, 5).map((s, i) => <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < Math.min(sourcePerf.length, 5) - 1 ? "1px solid #2e2e38" : "none" }}>
-              <span style={{ fontSize: 12, color: "#c8c5be" }}>{s.fonte} ({s.count})</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: "#4ade80" }}>{fmt(s.profit)}</span>
-            </div>)}
-          </div>}
-
-          {checkHistory.length > 0 && <div style={S.card}>
-            <div style={S.secTitle}>Storico checklist</div>
-            {checkHistory.slice(0, 15).map((c, i) => <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < Math.min(checkHistory.length, 15) - 1 ? "1px solid #2e2e38" : "none" }}>
-              <div>
-                <div style={{ fontSize: 12, color: "#c8c5be" }}>{c.brand} · {c.cat} · {c.taglia}</div>
-                <div style={{ fontSize: 9, color: "#6a6a72" }}>{new Date(c.date).toLocaleDateString("it-IT")}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 3, fontWeight: 500, color: c.verdict === "COMPRALO" ? "#4ade80" : c.verdict === "RISCHIO" ? "#fbbf24" : "#f87171", background: c.verdict === "COMPRALO" ? "#0d3320" : c.verdict === "RISCHIO" ? "#302a18" : "#301818" }}>{c.verdict}</span>
-                <div style={{ fontSize: 10, color: c.bought ? "#4ade80" : "#6a6a72", marginTop: 2 }}>{c.bought ? "Comprato" : "Saltato"}</div>
-              </div>
-            </div>)}
-          </div>}
-
-          {checkHistory.length === 0 && brandPerf.length === 0 && <div style={S.empty}><div style={{ fontSize: 12, color: "#6a6a72" }}>Usa la Checklist e vendi articoli per vedere i tuoi insight</div></div>}
-        </div>}
+        {/* ═══ STRATEGIE ═══ */}
+        {tab === "tips" && (
+          <div style={{ animation: "fadeIn 0.3s ease" }}>
+            <div style={S.tipsGrid}>
+              {TIPS.map((t, i) => (
+                <div key={t.num} style={{ ...S.tipCard, animation: `slideUp 0.3s ease ${i * 0.05}s forwards`, opacity: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <span style={{ fontSize: 28 }}>{t.icon}</span>
+                    <div>
+                      <div style={S.tipNum}>{t.num}</div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>{t.title}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.6 }}>{t.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </main>
 
       {/* BOTTOM NAV */}
-      <nav style={S.nav}>
-        {[{ id: "dash", icon: LayoutDashboard, l: "Home" }, { id: "inv", icon: Package, l: "Inventario" }, { id: "check", icon: Check, l: "Checklist", accent: true }, { id: "brand", icon: Tag, l: "Brand" }, { id: "insight", icon: TrendingUp, l: "Insight" }].map(t => {
-          const I = t.icon; const a = tab === t.id;
-          return <button key={t.id} onClick={() => { setTab(t.id); if (t.id === "check" && ckStep === 0) resetChecklist(); }} style={{ ...S.navI, color: a ? "#d4f55e" : t.accent ? "#d4f55e" : "#6a6a72", background: a ? "rgba(212,245,94,0.07)" : "transparent" }}><I size={t.accent ? 20 : 17} strokeWidth={a ? 2.5 : 1.5} /><span style={{ fontSize: 8, letterSpacing: 0.5 }}>{t.l}</span></button>;
+      <nav className="bottom-nav" style={S.bottomNav}>
+        {[
+          { id: "dashboard", icon: LayoutDashboard, label: "Home" },
+          { id: "inventario", icon: Package, label: "Inventario" },
+          { id: "aggiungi", icon: Plus, label: "Aggiungi", accent: true },
+          { id: "brands", icon: Tag, label: "Brand" },
+          { id: "tips", icon: Lightbulb, label: "Tips" },
+        ].map((t) => {
+          const Icon = t.icon; const isActive = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              ...S.navItem, color: isActive ? "var(--accent)" : t.accent ? "var(--accent)" : "var(--dim)",
+              background: isActive ? "rgba(212,245,94,0.08)" : "transparent",
+            }}>
+              <Icon size={t.accent ? 22 : 18} strokeWidth={isActive ? 2.5 : 1.5} />
+              <span style={{ fontSize: 9, letterSpacing: 0.5 }}>{t.label}</span>
+            </button>
+          );
         })}
       </nav>
 
-      {/* ─── MODALS ─── */}
-      {sellModal && <div style={S.ov} onClick={() => { setSellModal(null); setSellPrice(""); }}><div style={S.mod} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: "#f0ede8", marginBottom: 4 }}>A quanto l'hai venduto?</div>
-        <div style={{ fontSize: 11, color: "#9a9a9a", marginBottom: 12 }}>Listino: {sellModal.prezzoOriginale.toFixed(2)}€</div>
-        <input type="number" value={sellPrice} onChange={e => setSellPrice(e.target.value)} style={{ ...S.input, textAlign: "center", fontSize: 20, padding: 12, marginBottom: 12 }} autoFocus />
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => { setSellModal(null); setSellPrice(""); }} style={{ ...S.btn, flex: 1, background: "#26262d", color: "#9a9a9a", border: "1px solid #2e2e38" }}>Annulla</button>
-          <button onClick={confirmSell} style={{ ...S.btn, flex: 1, background: "#4ade80", color: "#000" }}>Conferma</button>
+      {/* SELL MODAL */}
+      {sellModal && (
+        <div style={S.overlay} onClick={() => { setSellModal(null); setSellPrice(""); }}>
+          <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>💰</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text)", marginBottom: 6 }}>A quanto l'hai venduto?</div>
+            <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 16 }}>Listino: {sellModal.prezzoOriginale.toFixed(2)}€ — cambia se hai contrattato.</div>
+            <input type="number" value={sellPrice} onChange={(e) => setSellPrice(e.target.value)} placeholder="Prezzo effettivo" step="0.01" min="0" style={{ ...S.input, textAlign: "center", fontSize: 18, fontWeight: 500, padding: 12, marginBottom: 16 }} autoFocus />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => { setSellModal(null); setSellPrice(""); }} style={S.modalCancel}>Annulla</button>
+              <button onClick={confirmSell} style={S.modalConfirm}>Conferma vendita</button>
+            </div>
+          </div>
         </div>
-      </div></div>}
+      )}
 
-      {showReset && <div style={S.ov} onClick={() => setShowReset(false)}><div style={S.mod} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: "#f0ede8", marginBottom: 6 }}>Azzerare tutto?</div>
-        <div style={{ fontSize: 11, color: "#9a9a9a", marginBottom: 16 }}>Tutti i dati verranno eliminati permanentemente.</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setShowReset(false)} style={{ ...S.btn, flex: 1, background: "#26262d", color: "#9a9a9a", border: "1px solid #2e2e38" }}>Annulla</button>
-          <button onClick={handleReset} style={{ ...S.btn, flex: 1, background: "#f87171", color: "#000" }}>Azzera</button>
+      {/* RESET MODAL */}
+      {showReset && (
+        <div style={S.overlay} onClick={() => setShowReset(false)}>
+          <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: "var(--text)", marginBottom: 8 }}>Azzerare tutto?</div>
+            <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 20, lineHeight: 1.5 }}>Tutti gli articoli, archivio e statistiche verranno eliminati. Non è possibile annullare.</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowReset(false)} style={S.modalCancel}>Annulla</button>
+              <button onClick={handleReset} style={S.modalDanger}>Sì, azzera tutto</button>
+            </div>
+          </div>
         </div>
-      </div></div>}
+      )}
 
-      {showAddBrand && <div style={S.ov} onClick={() => { setShowAddBrand(false); setEditingBrand(null); }}><div style={{ ...S.mod, textAlign: "left", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: "#f0ede8", marginBottom: 12 }}>{editingBrand ? "Modifica brand" : "Nuovo brand"}</div>
-        <Fld l="Nome"><input value={brandForm.name} onChange={e => setBrandForm(p => ({...p, name: e.target.value}))} style={S.input} /></Fld>
-        <div style={{ display: "flex", gap: 8 }}><Fld l="Domanda (1-5)"><input type="number" min="1" max="5" value={brandForm.domanda} onChange={e => setBrandForm(p => ({...p, domanda: e.target.value}))} style={S.input} /></Fld><Fld l="Margine %"><input type="number" value={brandForm.margine} onChange={e => setBrandForm(p => ({...p, margine: e.target.value}))} style={S.input} /></Fld></div>
-        <div style={{ display: "flex", gap: 8 }}><Fld l="Velocità"><select value={brandForm.velocita} onChange={e => setBrandForm(p => ({...p, velocita: e.target.value}))} style={S.input}>{["1-3 giorni","3-7 giorni","1-2 settimane","2-4 settimane"].map(v => <option key={v}>{v}</option>)}</select></Fld><Fld l="Difficoltà (1-4)"><input type="number" min="1" max="4" value={brandForm.difficoltaNum} onChange={e => setBrandForm(p => ({...p, difficoltaNum: e.target.value}))} style={S.input} /></Fld></div>
-        <div style={{ display: "flex", gap: 8 }}><Fld l="Prezzo acquisto"><input value={brandForm.prezzo} onChange={e => setBrandForm(p => ({...p, prezzo: e.target.value}))} style={S.input} /></Fld><Fld l="Prezzo vendita"><input value={brandForm.prezzoVendita} onChange={e => setBrandForm(p => ({...p, prezzoVendita: e.target.value}))} style={S.input} /></Fld></div>
-        <Fld l="Dove trovarlo"><input value={brandForm.source} onChange={e => setBrandForm(p => ({...p, source: e.target.value}))} style={S.input} /></Fld>
-        <Fld l="Note"><textarea value={brandForm.note} onChange={e => setBrandForm(p => ({...p, note: e.target.value}))} rows={2} style={{ ...S.input, resize: "vertical" }} /></Fld>
-        <Fld l="Consiglio"><textarea value={brandForm.consiglio} onChange={e => setBrandForm(p => ({...p, consiglio: e.target.value}))} rows={2} style={{ ...S.input, resize: "vertical" }} /></Fld>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => { setShowAddBrand(false); setEditingBrand(null); }} style={{ ...S.btn, flex: 1, background: "#26262d", color: "#9a9a9a", border: "1px solid #2e2e38" }}>Annulla</button>
-          <button onClick={saveCustomBrand} style={{ ...S.btn, flex: 1, background: "#4ade80", color: "#000" }}>{editingBrand ? "Salva" : "Aggiungi"}</button>
-        </div>
-      </div></div>}
-
-      {showManualAdd && <div style={S.ov} onClick={() => setShowManualAdd(false)}><div style={{ ...S.mod, textAlign: "left", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
-        <div style={{ fontSize: 14, fontWeight: 500, color: "#f0ede8", marginBottom: 12 }}>Aggiungi manualmente</div>
-        <Fld l="Nome *"><input value={mf.nome} onChange={e => setMf(p => ({...p, nome: e.target.value}))} style={S.input} /></Fld>
-        <div style={{ display: "flex", gap: 8 }}><Fld l="Brand"><input value={mf.brand} onChange={e => setMf(p => ({...p, brand: e.target.value}))} style={S.input} /></Fld><Fld l="Taglia"><select value={mf.taglia} onChange={e => setMf(p => ({...p, taglia: e.target.value}))} style={S.input}>{TAGLIE.map(t => <option key={t}>{t}</option>)}</select></Fld></div>
-        <div style={{ display: "flex", gap: 8 }}><Fld l="Costo €"><input type="number" value={mf.costo} onChange={e => setMf(p => ({...p, costo: e.target.value}))} style={S.input} /></Fld><Fld l="Prezzo €"><input type="number" value={mf.prezzo} onChange={e => setMf(p => ({...p, prezzo: e.target.value}))} style={S.input} /></Fld></div>
-        <div style={{ display: "flex", gap: 8 }}><Fld l="Categoria"><select value={mf.categoria} onChange={e => setMf(p => ({...p, categoria: e.target.value}))} style={S.input}>{CATEGORIE.map(c => <option key={c}>{c}</option>)}</select></Fld><Fld l="Fonte"><select value={mf.fonte} onChange={e => setMf(p => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map(f => <option key={f}>{f}</option>)}</select></Fld></div>
-        <Fld l="Condizione"><select value={mf.condizione} onChange={e => setMf(p => ({...p, condizione: e.target.value}))} style={S.input}>{CONDIZIONI.map(c => <option key={c}>{c}</option>)}</select></Fld>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setShowManualAdd(false)} style={{ ...S.btn, flex: 1, background: "#26262d", color: "#9a9a9a", border: "1px solid #2e2e38" }}>Annulla</button>
-          <button onClick={addManual} style={{ ...S.btn, flex: 1, background: "#4ade80", color: "#000" }}>Aggiungi</button>
-        </div>
-      </div></div>}
-
-      {toast && <div style={{ ...S.toast, background: toast.t === "err" ? "#301818" : "#183018", borderColor: toast.t === "err" ? "#f8717133" : "#4ade8033" }}>{toast.m}</div>}
+      {/* TOAST */}
+      {toast && (
+        <div style={{ ...S.toast, background: toast.type === "err" ? "#301818" : "#183018", borderColor: toast.type === "err" ? "#f8717144" : "#4ade8044" }}>{toast.msg}</div>
+      )}
     </div>
   );
 }
 
-function Fld({ l, children }) { return <div style={{ marginBottom: 10, flex: 1 }}><label style={{ display: "block", fontSize: 9, color: "#6a6a72", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>{l}</label>{children}</div>; }
+/* ─── SUB COMPONENTS ─── */
+function StatCard({ label, value, color, tip }) {
+  return (
+    <div style={S.statCard}>
+      <div style={{ fontSize: 22, fontWeight: 500, color, fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 1.5, textTransform: "uppercase", marginTop: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {label}{tip && <InfoTip text={tip} />}
+      </div>
+    </div>
+  );
+}
+
+function BigStat({ label, value, color, tip }) {
+  return (
+    <div style={{ ...S.card, flex: 1, textAlign: "center" }}>
+      <div style={{ fontSize: 11, color: "var(--muted)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {label}{tip && <InfoTip text={tip} />}
+      </div>
+      <div style={{ fontSize: 32, fontWeight: 500, color, fontFamily: "'Playfair Display', serif" }}>{value}</div>
+    </div>
+  );
+}
+
+function SectionTitle({ children }) {
+  return <div style={{ fontSize: 10, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 12 }}>{children}</div>;
+}
+
+function Field({ label, required, children }) {
+  return (
+    <div style={{ marginBottom: 14, flex: 1 }}>
+      <label style={S.label}>{label}{required && <span style={{ color: "var(--red)" }}> *</span>}</label>
+      {children}
+    </div>
+  );
+}
+
+function FilterChip({ active, onClick, children }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: "6px 12px", fontSize: 10, border: "1px solid",
+      borderColor: active ? "var(--accent)" : "var(--border)",
+      background: active ? "var(--accent)" : "var(--surface)",
+      color: active ? "#000" : "var(--muted)", fontWeight: active ? 500 : 400,
+      borderRadius: 20, cursor: "pointer", letterSpacing: 0.5, transition: "all 0.15s",
+      whiteSpace: "nowrap", fontFamily: "'DM Mono', monospace",
+    }}>{children}</button>
+  );
+}
+
+function StatusBadge({ venduto }) {
+  return (
+    <span style={{
+      fontSize: 9, padding: "2px 7px", borderRadius: 3, letterSpacing: 1, textTransform: "uppercase", whiteSpace: "nowrap",
+      ...(venduto
+        ? { background: "#0d3320", color: "var(--green)", border: "1px solid rgba(74,222,128,0.25)" }
+        : { background: "#33300d", color: "var(--yellow)", border: "1px solid rgba(251,191,36,0.25)" }),
+    }}>{venduto ? "✓ Venduto" : "In vendita"}</span>
+  );
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
+      <span style={{ fontSize: 11, color: "var(--dim)", flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 11, color: "var(--text2)", textAlign: "right", marginLeft: 12 }}>{value}</span>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, sub }) {
+  return (
+    <div style={S.emptyState}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 4 }}>{title}</div>
+      {sub && <div style={{ fontSize: 11, color: "var(--dim)" }}>{sub}</div>}
+    </div>
+  );
+}
 
 /* ─── STYLES ─── */
 const S = {
-  app: { background: "#151518", color: "#f0ede8", fontFamily: "'DM Mono', monospace", minHeight: "100vh", display: "flex", flexDirection: "column", maxWidth: 600, margin: "0 auto" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 16px 12px", borderBottom: "1px solid #2e2e38" },
-  logo: { fontFamily: "'Playfair Display', serif", fontStyle: "italic", fontSize: 24, color: "#d4f55e", letterSpacing: -1, lineHeight: 1 },
-  sub: { fontSize: 8, color: "#6a6a72", letterSpacing: 2, textTransform: "uppercase" },
-  hBtn: { width: 32, height: 32, borderRadius: "50%", border: "1px solid #2e2e38", background: "#1e1e23", color: "#9a9a9a", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
-  main: { flex: 1, padding: "16px 14px", paddingBottom: 80, overflowY: "auto" },
-  fade: { animation: "fadeIn 0.25s ease" },
-  row: { display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" },
-  stat: { flex: "1 1 0", minWidth: 70, background: "#1e1e23", border: "1px solid #2e2e38", borderRadius: 8, padding: "12px 8px", textAlign: "center" },
-  statL: { fontSize: 8, color: "#6a6a72", letterSpacing: 1, textTransform: "uppercase", marginTop: 3 },
-  card: { background: "#1e1e23", border: "1px solid #2e2e38", borderRadius: 8, padding: 14, marginBottom: 10 },
-  secTitle: { fontSize: 9, color: "#6a6a72", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 },
-  input: { width: "100%", background: "#26262d", border: "1px solid #2e2e38", color: "#f0ede8", fontFamily: "'DM Mono', monospace", fontSize: 12, padding: "9px 10px", borderRadius: 6, outline: "none" },
-  chip: { padding: "5px 10px", fontSize: 10, border: "1px solid #2e2e38", background: "#1e1e23", color: "#9a9a9a", borderRadius: 16, cursor: "pointer", fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" },
-  chipActive: { background: "#d4f55e", color: "#000", borderColor: "#d4f55e", fontWeight: 500 },
-  btn: { padding: "11px 16px", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "'DM Mono', monospace", textAlign: "center" },
-  ckTitle: { fontSize: 18, fontWeight: 500, color: "#f0ede8", fontFamily: "'Playfair Display', serif", marginBottom: 14 },
-  ckLabel: { fontSize: 10, color: "#6a6a72", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 },
-  ckOption: { width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "#1e1e23", border: "1px solid #2e2e38", borderRadius: 8, color: "#f0ede8", fontSize: 13, cursor: "pointer", fontFamily: "'DM Mono', monospace", marginBottom: 4, textAlign: "left" },
-  ckNext: { width: "100%", padding: 13, background: "#d4f55e", color: "#000", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'DM Mono', monospace" },
-  artCard: { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#1e1e23", border: "1px solid #2e2e38", borderRadius: 8, marginBottom: 5 },
-  actG: { width: 26, height: 26, borderRadius: 6, border: "none", background: "#4ade80", color: "#000", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
-  actD: { width: 26, height: 26, borderRadius: 6, border: "1px solid #2e2e38", background: "#26262d", color: "#6a6a72", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
-  bRow: { background: "#1e1e23", border: "1px solid #2e2e38", borderRadius: 8, padding: "12px 14px", marginBottom: 6, display: "flex", alignItems: "center" },
-  miniStat: { background: "#26262d", borderRadius: 6, padding: "8px 6px" },
-  miniL: { fontSize: 8, color: "#6a6a72", letterSpacing: 1, textTransform: "uppercase", marginBottom: 3 },
-  back: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "#9a9a9a", fontSize: 11, cursor: "pointer", padding: "0 0 12px", fontFamily: "'DM Mono', monospace" },
-  nav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 600, display: "flex", background: "rgba(21,21,24,0.95)", backdropFilter: "blur(16px)", borderTop: "1px solid #2e2e38", padding: "5px 6px 8px", zIndex: 100 },
-  navI: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 1, padding: "5px 2px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, fontFamily: "'DM Mono', monospace" },
-  ov: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 },
-  mod: { background: "#1e1e23", border: "1px solid #2e2e38", borderRadius: 12, padding: 22, textAlign: "center", maxWidth: 360, width: "100%" },
-  toast: { position: "fixed", bottom: 72, left: "50%", transform: "translateX(-50%)", padding: "8px 18px", borderRadius: 8, fontSize: 12, border: "1px solid", zIndex: 300, animation: "toastIn 0.3s ease", color: "#f0ede8", fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" },
-  empty: { textAlign: "center", padding: 32, border: "1px dashed #2e2e38", borderRadius: 8, marginTop: 16 },
+  app: { background: "var(--bg)", color: "var(--text)", fontFamily: "'DM Mono', monospace", minHeight: "100vh", display: "flex", flexDirection: "column", maxWidth: 600, margin: "0 auto", position: "relative" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 18px 14px", borderBottom: "1px solid var(--border)" },
+  logo: { fontFamily: "'Playfair Display', serif", fontStyle: "italic", fontSize: 26, color: "var(--accent)", letterSpacing: -1, lineHeight: 1 },
+  version: { fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase" },
+  headerBtn: { width: 36, height: 36, borderRadius: "50%", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--muted)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" },
+  installBanner: { display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "var(--surface)", borderBottom: "1px solid var(--border)" },
+  installBtn: { padding: "6px 14px", fontSize: 11, fontWeight: 500, background: "var(--accent)", color: "#000", border: "none", borderRadius: 6, cursor: "pointer", fontFamily: "'DM Mono', monospace", whiteSpace: "nowrap" },
+  content: { flex: 1, padding: "18px 16px", paddingBottom: 90, overflowY: "auto" },
+  statsRow: { display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" },
+  statCard: { flex: "1 1 0", minWidth: 80, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: "14px 12px", textAlign: "center" },
+  card: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, marginBottom: 12 },
+  input: { width: "100%", background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text)", fontFamily: "'DM Mono', monospace", fontSize: 12, padding: "10px 12px", borderRadius: 6, outline: "none", transition: "border-color 0.15s" },
+  label: { display: "block", fontSize: 10, letterSpacing: 1, color: "var(--dim)", textTransform: "uppercase", marginBottom: 5 },
+  formRow: { display: "flex", gap: 12 },
+  marginPreview: { display: "flex", justifyContent: "space-between", fontSize: 12, padding: "10px 14px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 6, marginBottom: 14 },
+  addBtn: { width: "100%", padding: "14px", background: "var(--accent)", color: "#000", border: "none", fontSize: 13, fontWeight: 500, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer", borderRadius: 8, marginTop: 4 },
+  articleCard: { display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 6 },
+  articleName: { fontSize: 13, fontWeight: 500, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  articleMeta: { fontSize: 10, color: "var(--dim)", display: "flex", gap: 5, flexWrap: "wrap" },
+  btnGreen: { width: 28, height: 28, borderRadius: 6, border: "none", background: "var(--green)", color: "#000", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
+  btnDel: { width: 28, height: 28, borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--dim)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" },
+  brandRow: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 14, marginBottom: 8, transition: "border-color 0.15s" },
+  backBtn: { display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "var(--muted)", fontSize: 12, cursor: "pointer", padding: "4px 0", marginBottom: 16, fontFamily: "'DM Mono', monospace" },
+  detailMetric: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 14 },
+  detailMetricLabel: { fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 },
+  metricBox: { flex: "1 1 0", minWidth: 90 },
+  metricLabel: { fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4, display: "flex", alignItems: "center" },
+  tipsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 10 },
+  tipCard: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 },
+  tipNum: { fontSize: 10, color: "var(--accent)", fontFamily: "'Playfair Display', serif", fontStyle: "italic" },
+  bottomNav: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 600, display: "flex", background: "rgba(21,21,24,0.95)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderTop: "1px solid var(--border)", padding: "6px 8px 10px", zIndex: 100 },
+  navItem: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "6px 4px", border: "none", background: "transparent", cursor: "pointer", borderRadius: 8, transition: "all 0.15s", fontFamily: "'DM Mono', monospace" },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20, animation: "fadeIn 0.2s ease" },
+  modal: { background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14, padding: 28, textAlign: "center", maxWidth: 360, width: "100%", animation: "slideUp 0.3s ease" },
+  modalCancel: { flex: 1, padding: 10, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--muted)", fontSize: 12, borderRadius: 8, cursor: "pointer", fontFamily: "'DM Mono', monospace" },
+  modalDanger: { flex: 1, padding: 10, border: "none", background: "var(--red)", color: "#000", fontSize: 12, fontWeight: 500, borderRadius: 8, cursor: "pointer", fontFamily: "'DM Mono', monospace" },
+  modalConfirm: { flex: 1, padding: 10, border: "none", background: "var(--green)", color: "#000", fontSize: 12, fontWeight: 500, borderRadius: 8, cursor: "pointer", fontFamily: "'DM Mono', monospace" },
+  toast: { position: "fixed", bottom: 80, left: "50%", transform: "translateX(-50%)", padding: "10px 20px", borderRadius: 10, fontSize: 12, border: "1px solid", zIndex: 300, animation: "toastIn 0.3s ease", backdropFilter: "blur(10px)", fontFamily: "'DM Mono', monospace", color: "var(--text)", whiteSpace: "nowrap" },
+  emptyState: { textAlign: "center", padding: 40, color: "var(--dim)", border: "1px dashed var(--border)", borderRadius: 10, marginTop: 20 },
 };

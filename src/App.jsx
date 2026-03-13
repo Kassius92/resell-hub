@@ -6,7 +6,7 @@ import {
 import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, BookOpen, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil, Lock, ChevronUp } from "lucide-react";
 import {
   BRANDS, GUIDA, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore,
-  TIPI_CAPO, evaluateItem
+  TIPI_CAPO, evaluateItem, recordSale
 } from "./data";
 
 /* ─── STORAGE ─── */
@@ -222,6 +222,14 @@ export default function App() {
 
   function confirmSell() {
     const fp = parseFloat(sellPrice) || 0;
+    const soldItem = articles.find(a => a.id === sellModal.id);
+    if (soldItem) {
+      recordSale({
+        brand: soldItem.brand, tipo: soldItem.categoria,
+        genere: soldItem.genere, taglia: soldItem.taglia,
+        condizione: soldItem.condizione, soldPrice: fp,
+      });
+    }
     setArticles((p) => p.map((a) => a.id === sellModal.id ? { ...a, venduto: true, prezzoVendita: fp, dataVendita: new Date().toISOString() } : a));
     setSellModal(null); setSellPrice(""); showToast("Venduto! 🎉");
   }
@@ -501,6 +509,7 @@ export default function App() {
         {tab === "aggiungi" && (
           <div style={{ animation: "fadeIn 0.3s ease", maxWidth: 500 }}>
             {/* ── MODE TOGGLE ── */}
+            {!valutaResult && (
             <div style={{ display: "flex", gap: 0, marginBottom: 16, background: "var(--surface)", borderRadius: 8, border: "1px solid var(--border)", overflow: "hidden" }}>
               {[{id:"valuta",label:"🧠 Valuta prima"},{id:"diretto",label:"+ Aggiungi diretto"}].map(m => (
                 <button key={m.id} onClick={() => { setAddMode(m.id); setValutaResult(null); }} style={{
@@ -511,9 +520,10 @@ export default function App() {
                 }}>{m.label}</button>
               ))}
             </div>
+            )}
 
             {/* ── VALUTA MODE ── */}
-            {addMode === "valuta" && (
+            {addMode === "valuta" && !valutaResult && (
               <div>
                 <div style={{ fontSize: 11, color: "var(--dim)", marginBottom: 12, lineHeight: 1.5 }}>
                   Inserisci i dettagli del pezzo che vuoi comprare. L'app stima il prezzo di rivendita e ti dice se conviene.
@@ -540,122 +550,134 @@ export default function App() {
                   </Field>
                   <button onClick={runValutazione} style={{ ...S.addBtn, background: "var(--accent)", color: "#111" }}>🧠 Valuta questo pezzo</button>
                 </div>
+              </div>
+            )}
 
-                {/* ── RESULT ── */}
-                {valutaResult && (
-                  <div style={{ marginTop: 16, animation: "slideUp 0.3s ease forwards" }}>
-                    {/* Verdict header */}
-                    <div style={{
-                      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
-                      padding: 20, textAlign: "center", marginBottom: 12,
-                    }}>
-                      <div style={{ fontSize: 32, marginBottom: 6 }}>{valutaResult.verdictIcon}</div>
-                      <div style={{ fontSize: 18, fontWeight: 600, color: valutaResult.verdictColor, fontFamily: "'Playfair Display', serif", marginBottom: 4 }}>
-                        {valutaResult.verdict}
-                      </div>
-                      <div style={{ fontSize: 11, color: "var(--dim)" }}>
-                        {valutaResult.brand} — {valutaResult.tipo}
-                      </div>
-                    </div>
+            {/* ── VALUTA RESULT SCREEN ── */}
+            {addMode === "valuta" && valutaResult && (
+              <div style={{ animation: "fadeIn 0.3s ease" }}>
+                <button onClick={() => setValutaResult(null)} style={S.backBtn}>
+                  <ArrowLeft size={14} /> Nuova valutazione
+                </button>
 
-                    {/* Price estimate */}
-                    <div style={{
-                      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
-                      padding: 16, marginBottom: 12,
-                    }}>
-                      <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Prezzo rivendita stimato</div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-                        <span style={{ fontSize: 28, fontWeight: 600, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>
-                          {valutaResult.priceMin}€ — {valutaResult.priceMax}€
-                        </span>
-                      </div>
-
-                      {valutaResult.marginPctMin !== null && (
-                        <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>
-                          <div>
-                            <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1 }}>Margine</div>
-                            <div style={{ fontSize: 14, fontWeight: 500, color: valutaResult.marginMin >= 0 ? "var(--green)" : "var(--red)" }}>
-                              {valutaResult.marginMin >= 0 ? "+" : ""}{valutaResult.marginMin.toFixed(2)}€ / {valutaResult.marginMax >= 0 ? "+" : ""}{valutaResult.marginMax.toFixed(2)}€
-                            </div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1 }}>ROI</div>
-                            <div style={{ fontSize: 14, fontWeight: 500, color: valutaResult.marginPctMin >= 50 ? "var(--green)" : valutaResult.marginPctMin >= 0 ? "var(--yellow)" : "var(--red)" }}>
-                              {valutaResult.marginPctMin}% — {valutaResult.marginPctMax}%
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Confidence bar */}
-                      <div style={{ marginTop: 6 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                          <span style={{ fontSize: 10, color: "var(--dim)" }}>Affidabilità stima</span>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: valutaResult.confidence >= 70 ? "var(--green)" : valutaResult.confidence >= 50 ? "var(--yellow)" : "var(--red)" }}>
-                            {valutaResult.confidence}%
-                          </span>
-                        </div>
-                        <div style={{ height: 6, background: "var(--surface2)", borderRadius: 3, overflow: "hidden" }}>
-                          <div style={{
-                            width: `${valutaResult.confidence}%`, height: "100%", borderRadius: 3,
-                            background: valutaResult.confidence >= 70 ? "var(--green)" : valutaResult.confidence >= 50 ? "var(--yellow)" : "var(--red)",
-                            transition: "width 0.5s ease",
-                          }} />
-                        </div>
-                        {valutaResult.confidence < 70 && (
-                          <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 6, lineHeight: 1.4 }}>
-                            {valutaResult.tier === "luxury"
-                              ? "Per i brand luxury il prezzo dipende molto dal modello specifico. Verifica sempre su Vinted."
-                              : valutaResult.confidence < 40
-                              ? "Brand non nel nostro database — la stima è approssimativa. Verifica su Vinted."
-                              : "Il tipo di capo non è nel dettaglio per questo brand. Verifica il prezzo reale."}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Indicators */}
-                    <div style={{
-                      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
-                      padding: 16, marginBottom: 12,
-                    }}>
-                      <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>Analisi dettagliata</div>
-                      {valutaResult.indicators.map((ind, i) => (
-                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                          <span style={{
-                            width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                            background: ind.color === "green" ? "var(--green)" : ind.color === "red" ? "var(--red)" : "var(--yellow)",
-                          }} />
-                          <span style={{ fontSize: 12, color: "var(--text)", lineHeight: 1.4 }}>{ind.label}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Vinted search button */}
-                    <a href={valutaResult.vintedUrl} target="_blank" rel="noopener noreferrer" style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      padding: "12px 16px", borderRadius: 10,
-                      background: "rgba(0,191,165,0.12)", border: "1px solid rgba(0,191,165,0.3)",
-                      color: "#00bfa5", fontSize: 13, fontWeight: 500, textDecoration: "none",
-                      fontFamily: "'DM Mono', monospace", marginBottom: 10,
-                    }}>
-                      <Search size={15} />
-                      Verifica su Vinted: "{valutaResult.vintedQuery}"
-                      <ExternalLink size={13} />
-                    </a>
-                    <div style={{ fontSize: 10, color: "var(--dim)", textAlign: "center", marginBottom: 14, lineHeight: 1.4 }}>
-                      Apri il link → confronta i prezzi degli annunci simili → controlla quanti preferiti hanno
-                    </div>
-
-                    {/* Add to inventory button */}
-                    <button onClick={addFromValuta} style={{
-                      ...S.addBtn, background: "transparent", border: "1px solid var(--border)",
-                      color: "var(--text)", fontSize: 12,
-                    }}>
-                      <Package size={14} /> Aggiungi all'inventario
-                    </button>
+                {/* Verdict header */}
+                <div style={{
+                  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+                  padding: 24, textAlign: "center", marginBottom: 14,
+                }}>
+                  <div style={{ fontSize: 40, marginBottom: 8 }}>{valutaResult.verdictIcon}</div>
+                  <div style={{ fontSize: 22, fontWeight: 600, color: valutaResult.verdictColor, fontFamily: "'Playfair Display', serif", marginBottom: 6 }}>
+                    {valutaResult.verdict}
                   </div>
-                )}
+                  <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                    {valutaResult.brand} — {valutaResult.tipo}{valutaForm.dettagli ? ` — ${valutaForm.dettagli}` : ""}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--dim)", marginTop: 4 }}>
+                    {valutaForm.genere} · Taglia {valutaForm.taglia} · {valutaForm.condizione}
+                  </div>
+                </div>
+
+                {/* Price estimate */}
+                <div style={{
+                  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+                  padding: 18, marginBottom: 14,
+                }}>
+                  <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>Prezzo rivendita stimato</div>
+                  <div style={{ fontSize: 32, fontWeight: 600, color: "var(--accent)", fontFamily: "'Playfair Display', serif", marginBottom: 12 }}>
+                    {valutaResult.priceMin}€ — {valutaResult.priceMax}€
+                  </div>
+
+                  {valutaResult.marginPctMin !== null && (
+                    <div style={{ display: "flex", gap: 20, marginBottom: 14 }}>
+                      <div>
+                        <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Margine stimato</div>
+                        <div style={{ fontSize: 16, fontWeight: 500, color: valutaResult.marginMin >= 0 ? "var(--green)" : "var(--red)" }}>
+                          {valutaResult.marginMin >= 0 ? "+" : ""}{valutaResult.marginMin.toFixed(2)}€ / {valutaResult.marginMax >= 0 ? "+" : ""}{valutaResult.marginMax.toFixed(2)}€
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>ROI</div>
+                        <div style={{ fontSize: 16, fontWeight: 500, color: valutaResult.marginPctMin >= 50 ? "var(--green)" : valutaResult.marginPctMin >= 0 ? "var(--yellow)" : "var(--red)" }}>
+                          {valutaResult.marginPctMin}% — {valutaResult.marginPctMax}%
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confidence bar */}
+                  <div style={{ paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, color: "var(--dim)" }}>Affidabilità stima</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: valutaResult.confidence >= 70 ? "var(--green)" : valutaResult.confidence >= 50 ? "var(--yellow)" : "var(--red)" }}>
+                        {valutaResult.confidence}%
+                      </span>
+                    </div>
+                    <div style={{ height: 8, background: "var(--surface2)", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{
+                        width: `${valutaResult.confidence}%`, height: "100%", borderRadius: 4,
+                        background: valutaResult.confidence >= 70 ? "var(--green)" : valutaResult.confidence >= 50 ? "var(--yellow)" : "var(--red)",
+                        transition: "width 0.5s ease",
+                      }} />
+                    </div>
+                    {valutaResult.confidence < 70 && (
+                      <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 8, lineHeight: 1.5 }}>
+                        {valutaResult.tier === "luxury"
+                          ? "Per i brand luxury il prezzo dipende molto dal modello specifico. Verifica sempre su Vinted."
+                          : valutaResult.confidence < 40
+                          ? "Brand non nel nostro database — la stima è approssimativa. Verifica su Vinted."
+                          : "Il tipo di capo non è nel dettaglio per questo brand. Verifica il prezzo reale."}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Indicators */}
+                <div style={{
+                  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+                  padding: 18, marginBottom: 14,
+                }}>
+                  <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 12 }}>Analisi dettagliata</div>
+                  {valutaResult.indicators.map((ind, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+                      <span style={{
+                        width: 9, height: 9, borderRadius: "50%", flexShrink: 0, marginTop: 3,
+                        background: ind.color === "green" ? "var(--green)" : ind.color === "red" ? "var(--red)" : "var(--yellow)",
+                      }} />
+                      <span style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5 }}>{ind.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Vinted search button */}
+                <a href={valutaResult.vintedUrl} target="_blank" rel="noopener noreferrer" style={{
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  padding: "14px 16px", borderRadius: 12,
+                  background: "rgba(0,191,165,0.12)", border: "1px solid rgba(0,191,165,0.3)",
+                  color: "#00bfa5", fontSize: 14, fontWeight: 500, textDecoration: "none",
+                  fontFamily: "'DM Mono', monospace", marginBottom: 8,
+                }}>
+                  <Search size={16} />
+                  Verifica su Vinted
+                  <ExternalLink size={13} />
+                </a>
+                <div style={{ fontSize: 10, color: "var(--dim)", textAlign: "center", marginBottom: 16, lineHeight: 1.4 }}>
+                  Cerca: "{valutaResult.vintedQuery}" → confronta prezzi e preferiti degli annunci simili
+                </div>
+
+                {/* Actions */}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={addFromValuta} style={{
+                    ...S.addBtn, flex: 1, background: "var(--accent)", color: "#111", fontSize: 13,
+                  }}>
+                    <Package size={15} /> Aggiungi all'inventario
+                  </button>
+                  <button onClick={() => setValutaResult(null)} style={{
+                    ...S.addBtn, flex: 1, background: "transparent", border: "1px solid var(--border)",
+                    color: "var(--muted)", fontSize: 13,
+                  }}>
+                    🧠 Valuta un altro
+                  </button>
+                </div>
               </div>
             )}
 

@@ -1507,15 +1507,93 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
   }
 
   /* 9. Keyword per ricerca Vinted */
-  const searchParts = [brand, tipo, dettagli].filter(Boolean).map(s => s.trim()).filter(s => s.length > 0);
+  const genderKeyword = genere === "Uomo" ? "uomo" : genere === "Donna" ? "donna" : "";
+  const searchParts = [brand, tipo, dettagli, genderKeyword, taglia !== "Unica" ? taglia : ""].filter(Boolean).map(s => s.trim()).filter(s => s.length > 0);
   const vintedQuery = searchParts.join(" ");
-  const vintedUrl = `https://www.vinted.it/catalog?search_text=${encodeURIComponent(vintedQuery)}&order=price_low_to_high`;
+  const vintedUrl = `https://www.vinted.it/catalog?search_text=${encodeURIComponent(vintedQuery)}&order=relevance`;
+
+  /* 10. Learning — adjust based on user's actual sales history */
+  const learnData = getLearnData();
+  const similar = learnData.filter(d =>
+    d.brand.toLowerCase() === brandName.toLowerCase() &&
+    (d.tipo === tipo || !d.tipo)
+  );
+  let learnedMin = min, learnedMax = max, learnNote = null;
+  if (similar.length >= 2) {
+    const prices = similar.map(d => d.soldPrice).sort((a, b) => a - b);
+    const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+    const lowPrice = prices[Math.floor(prices.length * 0.25)] || prices[0];
+    const highPrice = prices[Math.floor(prices.length * 0.75)] || prices[prices.length - 1];
+    learnedMin = Math.round((min * 0.3 + lowPrice * 0.7));
+    learnedMax = Math.round((max * 0.3 + highPrice * 0.7));
+    if (learnedMin > learnedMax) learnedMax = learnedMin;
+    confidence = Math.min(95, confidence + Math.min(similar.length * 3, 15));
+    learnNote = `Stima aggiustata con ${similar.length} tue vendite reali di ${brandName}`;
+    indicators.push({ label: `📊 ${learnNote}`, color: "green" });
+    /* recalc margins with learned prices */
+    const lMarginMin = Math.round((learnedMin - costo) * 100) / 100;
+    const lMarginMax = Math.round((learnedMax - costo) * 100) / 100;
+    const lMarginPctMin = costo > 0 ? Math.round((lMarginMin / costo) * 100) : null;
+    const lMarginPctMax = costo > 0 ? Math.round((lMarginMax / costo) * 100) : null;
+    /* re-evaluate verdict */
+    const lAvg = lMarginPctMin !== null ? (lMarginPctMin + lMarginPctMax) / 2 : avgMarginPct;
+    if (lAvg !== null) {
+      if (lAvg >= 100) { verdict = "Ottimo affare"; verdictColor = "var(--green)"; verdictIcon = "🟢"; }
+      else if (lAvg >= 50) { verdict = "Buon acquisto"; verdictColor = "var(--green)"; verdictIcon = "🟢"; }
+      else if (lAvg >= 20) { verdict = "Margine ok ma sottile"; verdictColor = "var(--yellow)"; verdictIcon = "🟡"; }
+      else if (lAvg >= 0) { verdict = "Margine troppo basso"; verdictColor = "var(--red)"; verdictIcon = "🔴"; }
+      else { verdict = "Ci perdi soldi"; verdictColor = "var(--red)"; verdictIcon = "🔴"; }
+    }
+    return {
+      brand: brandName, tipo, priceMin: learnedMin, priceMax: learnedMax,
+      confidence, marginMin: lMarginMin, marginMax: lMarginMax,
+      marginPctMin: lMarginPctMin, marginPctMax: lMarginPctMax,
+      verdict, verdictColor, verdictIcon,
+      indicators, vintedUrl, vintedQuery,
+      tier: brandData._tier, learnNote,
+    };
+  }
 
   return {
     brand: brandName, tipo, priceMin: min, priceMax: max,
     confidence, marginMin, marginMax, marginPctMin, marginPctMax,
     verdict, verdictColor, verdictIcon,
     indicators, vintedUrl, vintedQuery,
-    tier: brandData._tier,
+    tier: brandData._tier, learnNote,
   };
+}
+
+/* ─── LEARNING SYSTEM ─── */
+const LEARN_KEY = "resell-hub-learn";
+
+function getLearnData() {
+  try { return JSON.parse(localStorage.getItem(LEARN_KEY)) || []; } catch { return []; }
+}
+
+export function recordSale({ brand, tipo, genere, taglia, condizione, soldPrice }) {
+  const data = getLearnData();
+  data.push({
+    brand: (brand || "").trim(),
+    tipo: tipo || "",
+    genere: genere || "",
+    taglia: taglia || "",
+    condizione: condizione || "",
+    soldPrice: parseFloat(soldPrice) || 0,
+    date: new Date().toISOString().slice(0, 10),
+  });
+  /* keep last 500 records max */
+  const trimmed = data.slice(-500);
+  try { localStorage.setItem(LEARN_KEY, JSON.stringify(trimmed)); } catch {}
+}
+
+export function getLearnStats() {
+  const data = getLearnData();
+  const byBrand = {};
+  data.forEach(d => {
+    const key = d.brand.toLowerCase();
+    if (!byBrand[key]) byBrand[key] = { count: 0, total: 0, brand: d.brand };
+    byBrand[key].count++;
+    byBrand[key].total += d.soldPrice;
+  });
+  return { total: data.length, byBrand };
 }

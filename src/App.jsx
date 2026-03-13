@@ -96,6 +96,7 @@ export default function App() {
   const [brandSearch, setBrandSearch] = useState("");
   const [brandSort, setBrandSort] = useState("score");
   const [selectedBrand, setSelectedBrand] = useState(null);
+  const [brandTab, setBrandTab] = useState("comprare");
   const [customBrands, setCustomBrands] = useState(() => loadData(CUSTOM_BRANDS_KEY));
   const [showAddBrand, setShowAddBrand] = useState(false);
   const [editingBrand, setEditingBrand] = useState(null);
@@ -562,135 +563,141 @@ export default function App() {
 
           return (
           <div style={{ animation: "fadeIn 0.2s ease" }}>
-            <button onClick={() => setSelectedBrand(null)} style={S.backBtn}>
+            <button onClick={() => { setSelectedBrand(null); setBrandTab("comprare"); }} style={S.backBtn}>
               <ArrowLeft size={16} /> Tutti i brand
             </button>
 
-            {/* Header + Vinted link */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <h2 style={{ fontSize: 28, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{b.name}</h2>
-                  {b.custom && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: "rgba(212,245,94,0.15)", color: "var(--accent)", letterSpacing: 1, textTransform: "uppercase" }}>Tuo</span>}
-                </div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{b.note}</div>
+            {/* ─── NAME + BADGE ─── */}
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h2 style={{ fontSize: 26, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{b.name}</h2>
+                {b.custom && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: "rgba(212,245,94,0.15)", color: "var(--accent)", letterSpacing: 1, textTransform: "uppercase" }}>Tuo</span>}
               </div>
+              {b.note && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{b.note}</div>}
             </div>
 
             {/* Vinted link */}
             <a href={`https://www.vinted.it/catalog?search_text=${encodeURIComponent(b.name)}`} target="_blank" rel="noopener noreferrer"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--accent)", fontSize: 12, textDecoration: "none", marginBottom: 16, fontFamily: "'DM Mono', monospace" }}>
-              <ExternalLink size={14} /> Cerca "{b.name}" su Vinted
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--accent)", fontSize: 11, textDecoration: "none", marginBottom: 18, fontFamily: "'DM Mono', monospace" }}>
+              <ExternalLink size={13} /> Cerca su Vinted
             </a>
 
-            {/* Score + Key metrics */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-              <div style={{ ...S.detailMetric, background: "rgba(212,245,94,0.06)", borderColor: "rgba(212,245,94,0.15)" }}>
-                <div style={S.detailMetricLabel}>Punteggio <InfoTip text="Voto da 1 a 10 basato su: margine (40%), domanda (30%), velocità (20%), facilità (10%)" /></div>
-                <div style={{ fontSize: 32, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{score}</div>
+            {/* ━━━━━━ BLOCCO 1 — VALE LA PENA? ━━━━━━ */}
+            <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Vale la pena?</div>
+
+            {/* Score prominent */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <div style={{ ...S.detailMetric, flex: "0 0 auto", minWidth: 90, background: "rgba(212,245,94,0.06)", borderColor: "rgba(212,245,94,0.15)", textAlign: "center" }}>
+                <div style={{ fontSize: 9, color: "var(--accent)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Score</div>
+                <div style={{ fontSize: 36, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif", lineHeight: 1 }}>{score}</div>
                 <div style={{ fontSize: 9, color: "var(--dim)" }}>/ 10</div>
               </div>
-              <div style={S.detailMetric}>
-                <div style={S.detailMetricLabel}>Margine</div>
-                <div style={{ fontSize: 24, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{b.margine}%</div>
-              </div>
-              <div style={S.detailMetric}>
-                <div style={S.detailMetricLabel}>Vendita</div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: b.velocita === "1-3 giorni" ? "var(--green)" : b.velocita === "3-7 giorni" ? "var(--yellow)" : "var(--red)", marginTop: 2 }}>{b.velocita}</div>
+              <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>Margine</div>
+                  <div style={{ fontSize: 20, fontWeight: 500, color: "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{b.margine}%</div>
+                </div>
+                <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>Vendita</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, marginTop: 2, color: b.velocita === "1-3 giorni" ? "var(--green)" : b.velocita === "3-7 giorni" ? "var(--yellow)" : "var(--red)" }}>{b.velocita}</div>
+                </div>
+                <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>Domanda</div>
+                  <div style={{ marginTop: 4 }}><DemandDots level={b.domanda} /></div>
+                </div>
+                <div style={S.detailMetric}>
+                  <div style={S.detailMetricLabel}>Difficoltà</div>
+                  <div style={{ fontSize: 11, color: "var(--text2)", marginTop: 2 }}>{b.difficolta || `${b.difficoltaNum}/4`}</div>
+                </div>
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-              <div style={S.detailMetric}>
-                <div style={S.detailMetricLabel}>Domanda</div>
-                <div style={{ marginTop: 4 }}><DemandDots level={b.domanda} /></div>
-              </div>
-              <div style={S.detailMetric}>
-                <div style={S.detailMetricLabel}>Difficoltà</div>
-                <div style={{ fontSize: 12, color: "var(--text2)" }}>{b.difficolta || `Livello ${b.difficoltaNum}/4`}</div>
-              </div>
-            </div>
-
-            {/* Prices */}
+            {/* Prices side by side */}
             {(b.prezzo || b.prezzoVendita) && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-                {b.prezzo && <div style={S.detailMetric}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                {b.prezzo && <div style={{ ...S.detailMetric, flex: 1, textAlign: "center" }}>
                   <div style={S.detailMetricLabel}>💰 Compri a</div>
                   <div style={{ fontSize: 16, fontWeight: 500, color: "var(--red)" }}>{b.prezzo}</div>
                 </div>}
-                {b.prezzoVendita && <div style={S.detailMetric}>
+                {b.prezzoVendita && <div style={{ ...S.detailMetric, flex: 1, textAlign: "center" }}>
                   <div style={S.detailMetricLabel}>💸 Rivendi a</div>
                   <div style={{ fontSize: 16, fontWeight: 500, color: "var(--green)" }}>{b.prezzoVendita}</div>
                 </div>}
               </div>
             )}
 
-            {/* 📊 Storico personale */}
-            <div style={{ ...S.card, marginBottom: 16 }}>
-              <div style={{ fontSize: 10, color: "#60a5fa", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>📊 I tuoi numeri</div>
-              {mySold.length === 0 && myItems.length === 0 ? (
-                <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessun dato ancora — aggiungi articoli di {b.name} per vedere le tue stats.</div>
-              ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 20, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{myItems.filter((a) => !a.venduto).length}</div>
-                    <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>In vendita</div>
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 20, fontWeight: 500, color: "var(--green)", fontFamily: "'Playfair Display', serif" }}>{mySold.length}</div>
-                    <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>Venduti</div>
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 20, fontWeight: 500, color: myProfit >= 0 ? "var(--green)" : "var(--red)", fontFamily: "'Playfair Display', serif" }}>{formatEur(myProfit)}</div>
-                    <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>Guadagno totale</div>
-                  </div>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 20, fontWeight: 500, color: "var(--text2)", fontFamily: "'Playfair Display', serif" }}>{myAvgMargin ? myAvgMargin + "€" : "—"}</div>
-                    <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase" }}>Margine medio</div>
-                  </div>
+            {/* ━━━━━━ BLOCCO 2 — COME FARLO BENE ━━━━━━ */}
+            <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Come farlo bene</div>
+
+            {/* Internal tabs */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 12, background: "var(--surface)", padding: 3, borderRadius: 6, border: "1px solid var(--border)" }}>
+              {[
+                { id: "comprare", label: "✅ Comprare" },
+                { id: "evitare", label: "⛔ Evitare" },
+                { id: "consigli", label: "💡 Consigli" },
+              ].map((t) => (
+                <button key={t.id} onClick={() => setBrandTab(t.id)} style={{
+                  flex: 1, padding: "8px 4px", fontSize: 10, border: "none", borderRadius: 4, cursor: "pointer",
+                  fontFamily: "'DM Mono', monospace", transition: "all 0.15s", letterSpacing: 0.5,
+                  background: brandTab === t.id ? "var(--accent)" : "transparent",
+                  color: brandTab === t.id ? "#000" : "var(--muted)",
+                  fontWeight: brandTab === t.id ? 500 : 400,
+                }}>{t.label}</button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            <div style={{ ...S.card, marginBottom: 20, minHeight: 120 }}>
+              {brandTab === "comprare" && (
+                <div style={{ animation: "fadeIn 0.2s ease" }}>
+                  {b.cosaMeglio?.length > 0 ? b.cosaMeglio.map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
+                      <span style={{ color: "var(--green)", fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>•</span>
+                      <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>{item}</span>
+                    </div>
+                  )) : <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessuna info — {b.custom ? "modifica il brand per aggiungere" : "info non disponibile"}</div>}
+
+                  {/* Taglie + Stagione + Dove trovarlo inline */}
+                  {(b.taglieTop?.length > 0 || b.stagione || b.source) && (
+                    <div style={{ borderTop: "1px solid var(--border)", marginTop: 12, paddingTop: 10 }}>
+                      {b.taglieTop?.length > 0 && <DetailRow label="Taglie top" value={b.taglieTop.join(", ")} />}
+                      {b.source && <DetailRow label="Dove trovarlo" value={b.source} />}
+                      {b.stagione && <DetailRow label="Stagione" value={b.stagione} />}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {brandTab === "evitare" && (
+                <div style={{ animation: "fadeIn 0.2s ease" }}>
+                  {b.cosaEvitare?.length > 0 ? b.cosaEvitare.map((item, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
+                      <span style={{ color: "var(--red)", fontSize: 14, lineHeight: 1.2, flexShrink: 0 }}>•</span>
+                      <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.6 }}>{item}</span>
+                    </div>
+                  )) : <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessuna info</div>}
+                </div>
+              )}
+
+              {brandTab === "consigli" && (
+                <div style={{ animation: "fadeIn 0.2s ease" }}>
+                  {b.consiglio ? (
+                    <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.7 }}>{b.consiglio}</div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--dim)", fontStyle: "italic" }}>Nessun consiglio — {b.custom ? "modifica il brand per aggiungere" : "info non disponibile"}</div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Consiglio */}
-            {b.consiglio && (
-              <div style={{ ...S.card, background: "rgba(212,245,94,0.06)", borderColor: "rgba(212,245,94,0.15)", marginBottom: 16 }}>
-                <div style={{ fontSize: 10, color: "var(--accent)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>💡 Consiglio chiave</div>
-                <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.7 }}>{b.consiglio}</div>
-              </div>
-            )}
+            {/* ━━━━━━ BLOCCO 3 — ATTENZIONE + I TUOI DATI ━━━━━━ */}
+            <div style={{ fontSize: 9, color: "var(--dim)", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Attenzione & dati</div>
 
-            {/* Cosa comprare */}
-            {b.cosaMeglio?.length > 0 && (
-              <div style={{ ...S.card, marginBottom: 12 }}>
-                <div style={{ fontSize: 10, color: "var(--green)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>✅ Cosa comprare</div>
-                {b.cosaMeglio.map((item, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-                    <span style={{ color: "var(--green)", fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
-                    <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Cosa evitare */}
-            {b.cosaEvitare?.length > 0 && (
-              <div style={{ ...S.card, marginBottom: 12 }}>
-                <div style={{ fontSize: 10, color: "var(--red)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>⛔ Cosa evitare</div>
-                {b.cosaEvitare.map((item, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
-                    <span style={{ color: "var(--red)", fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
-                    <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ⚠️ Rischio falsi */}
+            {/* Rischio falsi */}
             {b.rischioFalsi && (
               <div style={{ ...S.card, marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, color: falsiColor, textTransform: "uppercase", letterSpacing: 1 }}>⚠️ Rischio falsi</div>
+                  <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--muted)" }}>⚠️ Rischio falsi</div>
                   <span style={{ fontSize: 11, fontWeight: 500, color: falsiColor, padding: "2px 8px", borderRadius: 4, background: b.rischioFalsi === "alto" ? "#301818" : b.rischioFalsi === "medio" ? "#302a18" : "#183018", border: `1px solid ${falsiColor}33` }}>
                     {b.rischioFalsi.charAt(0).toUpperCase() + b.rischioFalsi.slice(1)}
                   </span>
@@ -698,21 +705,40 @@ export default function App() {
                 {b.controlloFalsi?.map((item, i) => (
                   <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 6 }}>
                     <span style={{ color: falsiColor, fontSize: 12, marginTop: 1, flexShrink: 0 }}>•</span>
-                    <span style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
+                    <span style={{ fontSize: 11, color: "var(--text2)", lineHeight: 1.5 }}>{item}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Info pratiche */}
-            {(b.taglieTop?.length > 0 || b.source || b.stagione) && (
-              <div style={{ ...S.card, marginBottom: 12 }}>
-                <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>📋 Info pratiche</div>
-                {b.taglieTop?.length > 0 && <DetailRow label="Taglie più richieste" value={b.taglieTop.join(", ")} />}
-                {b.source && <DetailRow label="Dove trovarlo" value={b.source} />}
-                {b.stagione && <DetailRow label="Stagione migliore" value={b.stagione} />}
-              </div>
-            )}
+            {/* Storico personale */}
+            <div style={{ ...S.card, marginBottom: 16 }}>
+              <div style={{ fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--muted)", marginBottom: 10 }}>📊 I tuoi numeri su {b.name}</div>
+              {mySold.length === 0 && myItems.length === 0 ? (
+                <div style={{ fontSize: 11, color: "var(--dim)", fontStyle: "italic", textAlign: "center", padding: "10px 0" }}>
+                  Nessun dato — aggiungi articoli {b.name} nel tracker per vedere le tue stats
+                </div>
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{myItems.filter((a) => !a.venduto).length}</div>
+                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>In vendita</div>
+                  </div>
+                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: "var(--green)", fontFamily: "'Playfair Display', serif" }}>{mySold.length}</div>
+                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>Venduti</div>
+                  </div>
+                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: myProfit >= 0 ? "var(--green)" : "var(--red)", fontFamily: "'Playfair Display', serif" }}>{formatEur(myProfit)}</div>
+                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>Guadagno</div>
+                  </div>
+                  <div style={{ background: "var(--surface2)", borderRadius: 6, padding: 10, textAlign: "center" }}>
+                    <div style={{ fontSize: 18, fontWeight: 500, color: "var(--text2)", fontFamily: "'Playfair Display', serif" }}>{myAvgMargin ? myAvgMargin + "€" : "—"}</div>
+                    <div style={{ fontSize: 8, color: "var(--dim)", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>Margine medio</div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Edit/Delete for custom brands */}
             {b.custom && (
@@ -721,7 +747,7 @@ export default function App() {
                   <Pencil size={14} /> Modifica
                 </button>
                 <button onClick={() => deleteCustomBrand(b.id)} style={{ ...S.addBtn, background: "#301818", color: "var(--red)", border: "1px solid #f8717133", flex: 1 }}>
-                  Elimina brand
+                  Elimina
                 </button>
               </div>
             )}

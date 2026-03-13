@@ -808,9 +808,9 @@ export default function App() {
                     style={{
                       ...S.brandRow,
                       display: "flex", alignItems: "center", gap: 14,
-                      opacity: g.locked ? 0.45 : 1,
                       cursor: g.locked ? "default" : "pointer",
                       animation: `slideUp 0.3s ease ${i * 0.04}s forwards`, opacity: 0,
+                      ...(g.locked && { opacity: 0.45, animation: "none" }),
                     }}>
                     <span style={{ fontSize: 28, filter: g.locked ? "grayscale(1)" : "none" }}>{g.icon}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>

@@ -6,7 +6,7 @@ import {
 import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, BookOpen, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil, Lock, ChevronUp, ShoppingBag, TrendingUp, Zap, DollarSign, Clock } from "lucide-react";
 import {
   BRANDS, GUIDA, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore,
-  TIPI_CAPO, BRAND_LIST, evaluateItem, recordSale, getRecommendations
+  TIPI_CAPO, BRAND_LIST, COLORI, LOGO_TYPES, evaluateItem, recordSale, getRecommendations
 } from "./data";
 
 /* ─── STORAGE ─── */
@@ -179,7 +179,7 @@ export default function App() {
   const [valutaForm, setValutaForm] = useState({
     brand: "", tipo: "", genere: "Uomo", taglia: "M",
     condizione: "Ottime condizioni", costoAcquisto: "", prezzoVendita: "", dettagli: "",
-    fonte: "Mercatino", note: ""
+    fonte: "Mercatino", note: "", colore: "Nero", logo: "Logo grande"
   });
   const [valutaResult, setValutaResult] = useState(null);
   const [selectedRec, setSelectedRec] = useState(null);
@@ -600,6 +600,10 @@ export default function App() {
                   <div style={S.formRow}>
                     <Field label="Genere"><select value={valutaForm.genere} onChange={(e) => setValutaForm(p => ({...p, genere: e.target.value}))} style={S.input}>{GENERI.map(g => <option key={g}>{g}</option>)}</select></Field>
                     <Field label="Taglia"><select value={valutaForm.taglia} onChange={(e) => setValutaForm(p => ({...p, taglia: e.target.value}))} style={S.input}>{TAGLIE.map(t => <option key={t}>{t}</option>)}</select></Field>
+                  </div>
+                  <div style={S.formRow}>
+                    <Field label="Colore"><select value={valutaForm.colore} onChange={(e) => setValutaForm(p => ({...p, colore: e.target.value}))} style={S.input}>{COLORI.map(c => <option key={c}>{c}</option>)}</select></Field>
+                    <Field label="Logo"><select value={valutaForm.logo} onChange={(e) => setValutaForm(p => ({...p, logo: e.target.value}))} style={S.input}>{LOGO_TYPES.map(l => <option key={l}>{l}</option>)}</select></Field>
                   </div>
                   <div style={S.formRow}>
                     <Field label="Condizione"><select value={valutaForm.condizione} onChange={(e) => setValutaForm(p => ({...p, condizione: e.target.value}))} style={S.input}>{CONDIZIONI.map(c => <option key={c}>{c}</option>)}</select></Field>

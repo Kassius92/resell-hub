@@ -1381,6 +1381,31 @@ const CONDITION_MULT = {
   "Discrete condizioni": { mult: 0.65, label: "Discrete condizioni — prezzo basso", color: "red" },
 };
 
+const COLOR_MULT = {
+  "Nero": { mult: 1.05, label: "Nero — colore più venduto, sempre richiesto", color: "green" },
+  "Bianco": { mult: 1.03, label: "Bianco — colore classico, buona domanda", color: "green" },
+  "Blu/Navy": { mult: 1.03, label: "Blu/Navy — colore sicuro, domanda costante", color: "green" },
+  "Grigio": { mult: 1.0, label: "Grigio — neutro, si vende bene", color: "green" },
+  "Beige/Crema": { mult: 1.0, label: "Beige — neutro e di tendenza", color: "green" },
+  "Verde": { mult: 0.95, label: "Verde — dipende dalla tonalità, ok in generale", color: "yellow" },
+  "Rosso": { mult: 0.92, label: "Rosso — nicchia più ristretta", color: "yellow" },
+  "Marrone": { mult: 0.95, label: "Marrone — buono per outdoor/vintage", color: "yellow" },
+  "Rosa": { mult: 0.90, label: "Rosa — mercato specifico, vendita più lenta", color: "yellow" },
+  "Arancione": { mult: 0.85, label: "Arancione — colore difficile, vendita lenta", color: "red" },
+  "Giallo": { mult: 0.85, label: "Giallo — colore difficile, pochi acquirenti", color: "red" },
+  "Viola": { mult: 0.88, label: "Viola — nicchia, non per tutti", color: "yellow" },
+  "Multicolore": { mult: 0.90, label: "Multicolore — dipende dal design, mercato ridotto", color: "yellow" },
+};
+export const COLORI = Object.keys(COLOR_MULT);
+
+const LOGO_MULT = {
+  "Logo grande": { mult: 1.10, label: "Logo grande/visibile — si vende veloce e a prezzo alto", color: "green" },
+  "Logo medio": { mult: 1.0, label: "Logo medio — buona visibilità", color: "green" },
+  "Logo piccolo": { mult: 0.90, label: "Logo piccolo/ricamato — meno appeal su Vinted", color: "yellow" },
+  "Senza logo": { mult: 0.80, label: "Senza logo visibile — difficile da vendere come brand", color: "red" },
+};
+export const LOGO_TYPES = Object.keys(LOGO_MULT);
+
 const SIZE_POP = {
   uomo: { "S": 0.85, "M": 1.0, "L": 1.0, "XL": 0.92, "XS": 0.7, "XXL": 0.7 },
   donna: { "XS": 0.85, "S": 1.0, "M": 1.0, "L": 0.92, "XL": 0.8, "XXL": 0.7 },
@@ -1404,7 +1429,7 @@ const SEASON_HOT = {
 /* Tipi "tutto l'anno" (non in SEASON_HOT) non subiscono penalty stagionale */
 
 /* ─── FUNZIONE DI VALUTAZIONE ─── */
-export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcquisto, dettagli }) {
+export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcquisto, dettagli, colore, logo }) {
   const brandKey = Object.keys(PRICE_DB).find(k => k.toLowerCase() === (brand || "").toLowerCase());
   const db = brandKey ? PRICE_DB[brandKey] : null;
   const brandData = db || UNKNOWN_BRAND;
@@ -1426,6 +1451,16 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
   const sizeMult = sizeMap[taglia] || (taglia === "Unica" ? 1.0 : 0.85);
   min = Math.round(min * sizeMult);
   max = Math.round(max * sizeMult);
+
+  /* 3b. Moltiplicatore colore */
+  const colorData = COLOR_MULT[colore] || { mult: 1.0, label: "Colore non specificato", color: "yellow" };
+  min = Math.round(min * colorData.mult);
+  max = Math.round(max * colorData.mult);
+
+  /* 3c. Moltiplicatore logo */
+  const logoData = LOGO_MULT[logo] || { mult: 1.0, label: "Logo non specificato", color: "yellow" };
+  min = Math.round(min * logoData.mult);
+  max = Math.round(max * logoData.mult);
 
   /* 4. Stagionalità */
   const currentMonth = new Date().getMonth() + 1;
@@ -1529,6 +1564,12 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
   /* Stagionalità */
   indicators.push({ label: seasonLabel, color: seasonColor });
 
+  /* Colore */
+  indicators.push({ label: colorData.label, color: colorData.color });
+
+  /* Logo */
+  indicators.push({ label: logoData.label, color: logoData.color });
+
   /* Fast fashion warning */
   if (brandData._tier === "fast-fashion") {
     indicators.push({ label: "Fast fashion — margini molto bassi, serve volume", color: "red" });
@@ -1536,7 +1577,8 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
 
   /* 9. Keyword per ricerca Vinted */
   const genderKeyword = genere === "Uomo" ? "uomo" : genere === "Donna" ? "donna" : "";
-  const searchParts = [brand, tipo, dettagli, genderKeyword, taglia !== "Unica" ? taglia : ""].filter(Boolean).map(s => s.trim()).filter(s => s.length > 0);
+  const colorKeyword = colore && !["Multicolore"].includes(colore) ? colore.split("/")[0] : "";
+  const searchParts = [brand, tipo, dettagli, colorKeyword, genderKeyword, taglia !== "Unica" ? taglia : ""].filter(Boolean).map(s => s.trim()).filter(s => s.length > 0);
   const vintedQuery = searchParts.join(" ");
   const vintedUrl = `https://www.vinted.it/catalog?search_text=${encodeURIComponent(vintedQuery)}&order=relevance`;
 

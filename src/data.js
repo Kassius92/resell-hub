@@ -1100,6 +1100,68 @@ export function detectTipoFromModel(modelName) {
   return null;
 }
 
+/* ─── SMART PARSER ─── parsa "Nike Air Force 1" → { brand: "Nike", query: "Air Force 1" } */
+const BRAND_ALIASES = {
+  "tnf": "The North Face", "north face": "The North Face", "the north face": "The North Face",
+  "ralph": "Ralph Lauren", "ralph lauren": "Ralph Lauren", "polo ralph": "Ralph Lauren",
+  "tommy": "Tommy Hilfiger", "tommy hilfiger": "Tommy Hilfiger",
+  "levis": "Levi's", "levi's": "Levi's", "levi": "Levi's",
+};
+
+export function parseQuery(raw) {
+  const input = (raw || "").trim();
+  if (!input) return { brand: null, query: "", suggestions: [] };
+  const lower = input.toLowerCase();
+
+  /* 1. Detect brand */
+  let brand = null, remainder = input;
+
+  /* Check aliases first (longest first) */
+  const aliasKeys = Object.keys(BRAND_ALIASES).sort((a, b) => b.length - a.length);
+  for (const alias of aliasKeys) {
+    if (lower.startsWith(alias + " ") || lower === alias) {
+      brand = BRAND_ALIASES[alias];
+      remainder = input.slice(alias.length).trim();
+      break;
+    }
+  }
+  /* Check exact brand names (longest first) */
+  if (!brand) {
+    const sorted = [...BRAND_LIST].sort((a, b) => b.length - a.length);
+    for (const b of sorted) {
+      if (lower.startsWith(b.toLowerCase() + " ") || lower === b.toLowerCase()) {
+        brand = b;
+        remainder = input.slice(b.length).trim();
+        break;
+      }
+    }
+  }
+
+  /* 2. Build suggestions */
+  if (!brand) {
+    /* No brand yet — suggest brands that match */
+    const suggestions = BRAND_LIST.filter(b => b.toLowerCase().includes(lower)).map(b => ({ label: b, type: "brand" }));
+    return { brand: null, query: input, suggestions };
+  }
+
+  /* 3. Brand found — suggest models + types */
+  const { models, types } = getModelsForBrand(brand);
+  const rLower = remainder.toLowerCase();
+  let allItems = [
+    ...models.map(m => ({ label: m.name, type: "model", min: m.min, max: m.max, conf: m.conf, note: m.note })),
+    ...types.map(t => ({ label: t.name, type: "tipo", min: t.min, max: t.max })),
+  ];
+
+  if (rLower.length > 0) {
+    allItems = allItems.filter(it => it.label.toLowerCase().includes(rLower));
+  }
+
+  /* 4. Exact match? */
+  const exact = allItems.find(it => it.label.toLowerCase() === rLower);
+
+  return { brand, query: remainder, suggestions: allItems.slice(0, 12), match: exact || null };
+}
+
 /* ─── PRICE DATABASE ───
    Ogni brand ha prezzi base per tipo di capo.
    _default = fallback se il tipo non è nel database.

@@ -6,7 +6,7 @@ import {
 import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, BookOpen, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil, Lock, ChevronUp, ShoppingBag, TrendingUp, Zap, DollarSign, Clock } from "lucide-react";
 import {
   BRANDS, GUIDA, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore,
-  TIPI_CAPO, BRAND_LIST, BRAND_INFO, COLORI, LOGO_TYPES, evaluateItem, recordSale, getRecommendations, getModelsForBrand, detectTipoFromModel
+  TIPI_CAPO, BRAND_LIST, BRAND_INFO, COLORI, LOGO_TYPES, evaluateItem, recordSale, getRecommendations, getModelsForBrand
 } from "./data";
 
 /* ─── STORAGE ─── */
@@ -189,13 +189,8 @@ export default function App() {
 
   function runValutazione() {
     if (!valutaForm.brand.trim()) { showToast("Inserisci il brand!", "err"); return; }
-    /* Auto-detect tipo if model is set */
-    let finalTipo = valutaForm.tipo;
-    const autoTipo = detectTipoFromModel(valutaForm.dettagli);
-    if (autoTipo) finalTipo = autoTipo;
-    if (!finalTipo) { showToast("Seleziona il tipo di capo!", "err"); return; }
-    const formData = { ...valutaForm, tipo: finalTipo };
-    const result = evaluateItem(formData);
+    if (!valutaForm.tipo) { showToast("Seleziona il tipo di capo!", "err"); return; }
+    const result = evaluateItem(valutaForm);
     const userPrice = parseFloat(valutaForm.prezzoVendita);
     if (userPrice > 0) {
       const costo = parseFloat(valutaForm.costoAcquisto) || 0;
@@ -620,9 +615,6 @@ export default function App() {
             {selectedAddBrand && !valutaResult && (() => {
               const info = BRAND_INFO[selectedAddBrand] || {};
               const { modelNames, types } = getModelsForBrand(selectedAddBrand);
-              const detectedTipo = detectTipoFromModel(valutaForm.dettagli);
-              const tipoLocked = !!detectedTipo;
-              const currentTipo = detectedTipo || valutaForm.tipo;
 
               return (
                 <div>
@@ -637,11 +629,7 @@ export default function App() {
                     <Field label="Modello (opzionale)">
                       <AutocompleteInput
                         value={valutaForm.dettagli}
-                        onChange={(v) => {
-                          setValutaForm(p => ({ ...p, dettagli: v }));
-                          const auto = detectTipoFromModel(v);
-                          if (auto) setValutaForm(p => ({ ...p, tipo: auto }));
-                        }}
+                        onChange={(v) => setValutaForm(p => ({ ...p, dettagli: v }))}
                         options={modelNames}
                         placeholder="es. Air Force 1, Tech Fleece, Nuptse 700..."
                         style={S.input}
@@ -649,19 +637,12 @@ export default function App() {
                       <div style={{ fontSize: 9, color: "var(--dim)", marginTop: 3 }}>Scrivi per cercare tra {modelNames.length} modelli — oppure lascia vuoto</div>
                     </Field>
 
-                    {/* Tipo di capo */}
-                    <Field label={tipoLocked ? `Tipo di capo (auto: ${currentTipo})` : "Tipo di capo *"}>
-                      {tipoLocked ? (
-                        <div style={{ ...S.input, background: "var(--surface2)", color: "var(--text)", display: "flex", alignItems: "center", padding: "8px 12px" }}>
-                          {currentTipo}
-                          <span style={{ fontSize: 9, color: "var(--green)", marginLeft: 8 }}>✓ rilevato</span>
-                        </div>
-                      ) : (
-                        <select value={valutaForm.tipo} onChange={(e) => setValutaForm(p => ({...p, tipo: e.target.value}))} style={S.input}>
-                          <option value="">— Seleziona —</option>
-                          {types.map(t => <option key={t.id} value={t.name}>{t.name} ({t.min}–{t.max}€)</option>)}
-                        </select>
-                      )}
+                    {/* Tipo di capo — sempre dropdown */}
+                    <Field label="Tipo di capo *">
+                      <select value={valutaForm.tipo} onChange={(e) => setValutaForm(p => ({...p, tipo: e.target.value}))} style={S.input}>
+                        <option value="">— Seleziona —</option>
+                        {types.map(t => <option key={t.id} value={t.name}>{t.name} ({t.min}–{t.max}€)</option>)}
+                      </select>
                     </Field>
 
                     <div style={S.formRow}>
@@ -683,11 +664,7 @@ export default function App() {
                     <Field label="Note (opzionale)">
                       <textarea value={valutaForm.note} onChange={(e) => setValutaForm(p => ({...p, note: e.target.value}))} placeholder="Difetti, dettagli extra..." rows={2} style={{ ...S.input, resize: "vertical", minHeight: 42 }} />
                     </Field>
-                    <button onClick={() => {
-                      /* Use detected tipo if locked */
-                      if (detectedTipo) setValutaForm(p => ({ ...p, tipo: detectedTipo }));
-                      setTimeout(runValutazione, 10);
-                    }} style={{ ...S.addBtn, background: "var(--accent)", color: "#111" }}>🧠 Valuta</button>
+                    <button onClick={runValutazione} style={{ ...S.addBtn, background: "var(--accent)", color: "#111" }}>🧠 Valuta</button>
                   </div>
                 </div>
               );

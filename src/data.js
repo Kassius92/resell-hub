@@ -1805,8 +1805,8 @@ export function getLearnStats() {
 
 const MONTH_NAMES_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 
-export function getRecommendations() {
-  const month = new Date().getMonth() + 1; // 1-12
+export function getRecommendations(customMonth) {
+  const month = customMonth || (new Date().getMonth() + 1); // 1-12
   const monthName = MONTH_NAMES_IT[month - 1];
 
   /* 1. Tipi di capo in stagione adesso */
@@ -1942,5 +1942,71 @@ export function getRecommendations() {
 
   return {
     month, monthName, topPicks, hotNow, prepareNext, budgetPicks, highMargin, offSeason,
+  };
+}
+
+/* ─── ENRICHED RECOMMENDATIONS ─── */
+const SPEED_MAP = { 5: "1–3 giorni", 4: "3–7 giorni", 3: "1–2 settimane", 2: "2–4 settimane", 1: "1+ mese" };
+const BEST_SIZES = { streetwear: "M, L, XL", classic: "M, L", outdoor: "M, L, XL", luxury: "S, M", "fast-fashion": "S, M, L", unknown: "M, L" };
+
+export function getFullRecommendations(monthNum) {
+  const raw = getRecommendations(monthNum);
+  /* Merge all, dedupe, take top items */
+  const all = [...raw.topPicks, ...raw.hotNow, ...raw.prepareNext, ...raw.highMargin, ...raw.budgetPicks, ...raw.offSeason];
+  const seen = new Set();
+  const unique = [];
+  for (const r of all) {
+    const key = r.brand + "|" + r.tipo;
+    if (!seen.has(key)) { seen.add(key); unique.push(r); }
+  }
+  const sorted = unique.sort((a, b) => b.score - a.score);
+
+  /* Enrich each with eval data + extra info */
+  return {
+    month: raw.month,
+    monthName: raw.monthName,
+    items: sorted.map(r => {
+      const ev = evaluateItem({ brand: r.brand, tipo: r.tipo, genere: "Uomo", taglia: "M", condizione: "Ottime condizioni", costoAcquisto: String(r.priceMin), dettagli: "", colore: "Nero", logo: "Logo grande" });
+
+      /* Find relevant models for this brand+tipo */
+      const brandKey = Object.keys(PRICE_DB).find(k => k.toLowerCase() === r.brand.toLowerCase());
+      const db = brandKey ? PRICE_DB[brandKey] : null;
+      let topModels = [];
+      if (db && db._models) {
+        /* Find models that match this tipo category */
+        const SHOE_KW = ["force","af1","dunk","air max","vapormax","cortez","blazer","huarache","pegasus","shox","monarch","jordan","samba","gazelle","superstar","stan smith","campus","forum","ultraboost","nmd","yeezy","spezial","handball","sl 72","country","ozweego","zx","continental"];
+        const isShoeType = ["Sneakers","Scarpe","Stivali"].includes(r.tipo);
+        topModels = Object.entries(db._models)
+          .filter(([key]) => {
+            const isShoeModel = SHOE_KW.some(k => key.includes(k));
+            if (isShoeType) return isShoeModel;
+            return !isShoeModel;
+          })
+          .sort((a, b) => (b[1].conf || 0) - (a[1].conf || 0))
+          .slice(0, 5)
+          .map(([key, val]) => ({
+            name: key.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+            min: val.min, max: val.max, conf: val.conf || 80, note: val.note || "",
+          }));
+      }
+
+      return {
+        ...r,
+        /* Eval data */
+        sellMin: ev.priceMin, sellMax: ev.priceMax,
+        marginMin: ev.marginMin, marginMax: ev.marginMax,
+        roiMin: ev.marginPctMin, roiMax: ev.marginPctMax,
+        confidence: ev.confidence,
+        indicators: ev.indicators || [],
+        vintedUrl: ev.vintedUrl,
+        /* Extra info */
+        speed: SPEED_MAP[r.demand] || "1–2 settimane",
+        bestSizes: BEST_SIZES[r.tier] || "M, L",
+        topModels,
+        /* Season tag */
+        seasonTag: r.isHot ? "🟢 In stagione" : r.isNear ? "🟡 Quasi in stagione" : r.isAllYear ? "🔵 Tutto l'anno" : "🔴 Fuori stagione",
+        seasonColor: r.isHot ? "#4ade80" : r.isNear ? "#fbbf24" : r.isAllYear ? "#60a5fa" : "#f87171",
+      };
+    }),
   };
 }

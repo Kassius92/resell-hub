@@ -6,7 +6,7 @@ import {
 import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, BookOpen, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil, Lock, ChevronUp, ShoppingBag, TrendingUp, Zap, DollarSign, Clock } from "lucide-react";
 import {
   BRANDS, GUIDA, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore,
-  TIPI_CAPO, BRAND_LIST, COLORI, LOGO_TYPES, evaluateItem, recordSale, getRecommendations
+  TIPI_CAPO, BRAND_LIST, BRAND_INFO, COLORI, LOGO_TYPES, evaluateItem, recordSale, getRecommendations, getModelsForBrand
 } from "./data";
 
 /* ─── STORAGE ─── */
@@ -184,6 +184,7 @@ export default function App() {
   const [valutaResult, setValutaResult] = useState(null);
   const [selectedRec, setSelectedRec] = useState(null);
   const [openAcquistaSections, setOpenAcquistaSections] = useState({"top": true});
+  const [selectedAddBrand, setSelectedAddBrand] = useState(null);
 
   function runValutazione() {
     if (!valutaForm.brand.trim()) { showToast("Inserisci il brand!", "err"); return; }
@@ -581,54 +582,143 @@ export default function App() {
         {tab === "aggiungi" && (
           <div style={{ animation: "fadeIn 0.3s ease", maxWidth: 500 }}>
 
-            {/* ── FORM (hidden when result showing) ── */}
-            {!valutaResult && (
+            {/* ── STEP 1: BRAND SELECTION ── */}
+            {!selectedAddBrand && !valutaResult && (
               <div>
-                <SectionTitle>Valuta un pezzo</SectionTitle>
-                <div style={{ fontSize: 11, color: "var(--dim)", marginBottom: 12, lineHeight: 1.5 }}>
-                  Inserisci i dettagli del pezzo. L'app stima il prezzo di rivendita e ti dice se conviene.
-                </div>
-                <div style={S.card}>
-                  <div style={S.formRow}>
-                    <Field label="Brand *">
-                      <AutocompleteInput value={valutaForm.brand} onChange={(v) => setValutaForm(p => ({...p, brand: v}))} options={BRAND_LIST} placeholder="Scrivi il brand..." style={S.input} />
-                    </Field>
-                    <Field label="Tipo di capo *">
-                      <AutocompleteInput value={valutaForm.tipo} onChange={(v) => setValutaForm(p => ({...p, tipo: v}))} options={TIPI_CAPO} placeholder="Scrivi il tipo..." style={S.input} />
-                    </Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Genere"><select value={valutaForm.genere} onChange={(e) => setValutaForm(p => ({...p, genere: e.target.value}))} style={S.input}>{GENERI.map(g => <option key={g}>{g}</option>)}</select></Field>
-                    <Field label="Taglia"><select value={valutaForm.taglia} onChange={(e) => setValutaForm(p => ({...p, taglia: e.target.value}))} style={S.input}>{TAGLIE.map(t => <option key={t}>{t}</option>)}</select></Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Colore"><select value={valutaForm.colore} onChange={(e) => setValutaForm(p => ({...p, colore: e.target.value}))} style={S.input}>{COLORI.map(c => <option key={c}>{c}</option>)}</select></Field>
-                    <Field label="Logo"><select value={valutaForm.logo} onChange={(e) => setValutaForm(p => ({...p, logo: e.target.value}))} style={S.input}>{LOGO_TYPES.map(l => <option key={l}>{l}</option>)}</select></Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Condizione"><select value={valutaForm.condizione} onChange={(e) => setValutaForm(p => ({...p, condizione: e.target.value}))} style={S.input}>{CONDIZIONI.map(c => <option key={c}>{c}</option>)}</select></Field>
-                    <Field label="Fonte acquisto"><select value={valutaForm.fonte} onChange={(e) => setValutaForm(p => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map(f => <option key={f}>{f}</option>)}</select></Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Prezzo d'acquisto (€)"><input type="number" value={valutaForm.costoAcquisto} onChange={(e) => setValutaForm(p => ({...p, costoAcquisto: e.target.value}))} placeholder="0.00" step="0.01" min="0" style={S.input} /></Field>
-                    <Field label="Prezzo vendita (€) — opzionale"><input type="number" value={valutaForm.prezzoVendita} onChange={(e) => setValutaForm(p => ({...p, prezzoVendita: e.target.value}))} placeholder="L'app stima se vuoto" step="0.01" min="0" style={S.input} /></Field>
-                  </div>
-                  <Field label="Modello / dettagli (opzionale)">
-                    <input value={valutaForm.dettagli} onChange={(e) => setValutaForm(p => ({...p, dettagli: e.target.value}))} placeholder="es. Nuptse 700, 501 Original, Baguette..." style={S.input} />
-                  </Field>
-                  <Field label="Note (opzionale)">
-                    <textarea value={valutaForm.note} onChange={(e) => setValutaForm(p => ({...p, note: e.target.value}))} placeholder="es. Etichetta presente, piccolo difetto..." rows={2} style={{ ...S.input, resize: "vertical", minHeight: 48 }} />
-                  </Field>
-                  <button onClick={runValutazione} style={{ ...S.addBtn, background: "var(--accent)", color: "#111" }}>🧠 Valuta questo pezzo</button>
+                <SectionTitle>Scegli il brand</SectionTitle>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {BRAND_LIST.map((b, i) => {
+                    const info = BRAND_INFO[b] || {};
+                    return (
+                      <div key={b} onClick={() => { setSelectedAddBrand(b); setValutaForm(p => ({ ...p, brand: b, tipo: "", dettagli: "" })); }}
+                        style={{
+                          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+                          padding: "16px 14px", cursor: "pointer", transition: "border-color 0.15s",
+                          animation: `slideUp 0.25s ease ${i * 0.04}s forwards`, opacity: 0,
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.borderColor = info.color || "var(--accent)"}
+                        onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
+                      >
+                        <div style={{ fontSize: 22, fontWeight: 700, color: info.color || "var(--accent)", fontFamily: "'Playfair Display', serif", marginBottom: 4 }}>{b}</div>
+                        <div style={{ fontSize: 10, color: "var(--dim)", lineHeight: 1.4 }}>{info.desc || ""}</div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* ── RESULT SCREEN ── */}
+            {/* ── STEP 2: MODEL / TYPE SELECTION ── */}
+            {selectedAddBrand && !valutaResult && (() => {
+              const { types, models } = getModelsForBrand(selectedAddBrand);
+              const info = BRAND_INFO[selectedAddBrand] || {};
+              /* Group models by category */
+              const sneakerKw = ["air force", "af1", "dunk", "air max", "vapormax", "cortez", "blazer", "huarache", "react", "waffle", "pegasus", "shox", "monarch", "jordan", "sb dunk", "samba", "gazelle", "superstar", "stan smith", "campus", "forum", "ultraboost", "nmd", "yeezy", "spezial", "handball", "sl 72", "country", "ozweego", "zx", "continental", "501", "505", "511", "512", "517", "550"];
+              const apparelKw = ["tech fleece", "vintage", "swoosh", "big swoosh", "travis", "off-white", "sacai", "acg", "sb", "dri-fit", "pro", "sportswear", "windrunner", "firebird", "beckenbauer", "trefoil", "flag", "colorblock", "sailing", "windbreaker", "jeans", "reverse weave", "script", "made in usa", "detroit", "chore", "active", "michigan", "wip", "double knee", "carpenter", "beanie", "big pony", "bear", "polo bear", "sport", "polo sport", "oxford", "harrington", "cable", "l.12.12", "classic fit", "slim fit", "chemise", "live", "trucker", "sherpa", "ex boyfriend", "ribcage"];
+
+              return (
+                <div>
+                  <button onClick={() => setSelectedAddBrand(null)} style={S.backBtn}><ArrowLeft size={14} /> Tutti i brand</button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: info.color || "var(--accent)", fontFamily: "'Playfair Display', serif" }}>{selectedAddBrand}</div>
+                  </div>
+
+                  {/* Modelli specifici */}
+                  {models.length > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Modelli specifici — stima più precisa</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                        {models.map((m, i) => (
+                          <div key={m.id} onClick={() => {
+                            setValutaForm(p => ({ ...p, brand: selectedAddBrand, dettagli: m.name, tipo: types.length > 0 ? types[0].name : "Sneakers" }));
+                            /* Auto-detect tipo from model */
+                            const lk = m.id.toLowerCase();
+                            const isShoe = sneakerKw.some(k => lk.includes(k));
+                            if (isShoe) setValutaForm(p => ({ ...p, tipo: "Sneakers" }));
+                          }}
+                            style={{
+                              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+                              padding: "10px 12px", cursor: "pointer", transition: "border-color 0.15s",
+                              animation: `slideUp 0.2s ease ${i * 0.02}s forwards`, opacity: 0,
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.borderColor = info.color || "var(--accent)"}
+                            onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
+                          >
+                            <div style={{ fontSize: 12, fontWeight: 500, color: "var(--text)", marginBottom: 2 }}>{m.name}</div>
+                            <div style={{ fontSize: 10, color: "var(--accent)", fontFamily: "'DM Mono', monospace" }}>{m.min}€ — {m.max}€</div>
+                            {m.conf >= 85 && <div style={{ fontSize: 8, color: "var(--green)", marginTop: 2 }}>● Alta precisione</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tipi generici */}
+                  <div>
+                    <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Per tipo di capo — stima generica</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                      {types.map((t, i) => (
+                        <div key={t.id} onClick={() => setValutaForm(p => ({ ...p, brand: selectedAddBrand, tipo: t.name, dettagli: "" }))}
+                          style={{
+                            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
+                            padding: "8px 10px", cursor: "pointer", textAlign: "center", transition: "border-color 0.15s",
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--accent)"}
+                          onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
+                        >
+                          <div style={{ fontSize: 11, color: "var(--text)" }}>{t.name}</div>
+                          <div style={{ fontSize: 9, color: "var(--dim)", fontFamily: "'DM Mono', monospace" }}>{t.min}€–{t.max}€</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Form compatto sotto la selezione */}
+                  {(valutaForm.tipo || valutaForm.dettagli) && (
+                    <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: 11, color: "var(--accent)", fontFamily: "'DM Mono', monospace", marginBottom: 10 }}>
+                        {selectedAddBrand} → {valutaForm.dettagli || valutaForm.tipo}
+                      </div>
+                      <div style={S.card}>
+                        {valutaForm.dettagli && (
+                          <Field label="Tipo di capo">
+                            <select value={valutaForm.tipo} onChange={(e) => setValutaForm(p => ({...p, tipo: e.target.value}))} style={S.input}>
+                              {types.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                            </select>
+                          </Field>
+                        )}
+                        <div style={S.formRow}>
+                          <Field label="Genere"><select value={valutaForm.genere} onChange={(e) => setValutaForm(p => ({...p, genere: e.target.value}))} style={S.input}>{GENERI.map(g => <option key={g}>{g}</option>)}</select></Field>
+                          <Field label="Taglia"><select value={valutaForm.taglia} onChange={(e) => setValutaForm(p => ({...p, taglia: e.target.value}))} style={S.input}>{TAGLIE.map(t => <option key={t}>{t}</option>)}</select></Field>
+                        </div>
+                        <div style={S.formRow}>
+                          <Field label="Colore"><select value={valutaForm.colore} onChange={(e) => setValutaForm(p => ({...p, colore: e.target.value}))} style={S.input}>{COLORI.map(c => <option key={c}>{c}</option>)}</select></Field>
+                          <Field label="Logo"><select value={valutaForm.logo} onChange={(e) => setValutaForm(p => ({...p, logo: e.target.value}))} style={S.input}>{LOGO_TYPES.map(l => <option key={l}>{l}</option>)}</select></Field>
+                        </div>
+                        <div style={S.formRow}>
+                          <Field label="Condizione"><select value={valutaForm.condizione} onChange={(e) => setValutaForm(p => ({...p, condizione: e.target.value}))} style={S.input}>{CONDIZIONI.map(c => <option key={c}>{c}</option>)}</select></Field>
+                          <Field label="Fonte"><select value={valutaForm.fonte} onChange={(e) => setValutaForm(p => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map(f => <option key={f}>{f}</option>)}</select></Field>
+                        </div>
+                        <div style={S.formRow}>
+                          <Field label="Prezzo acquisto (€)"><input type="number" value={valutaForm.costoAcquisto} onChange={(e) => setValutaForm(p => ({...p, costoAcquisto: e.target.value}))} placeholder="0.00" step="0.01" min="0" style={S.input} /></Field>
+                          <Field label="Prezzo vendita (€)"><input type="number" value={valutaForm.prezzoVendita} onChange={(e) => setValutaForm(p => ({...p, prezzoVendita: e.target.value}))} placeholder="Stima auto" step="0.01" min="0" style={S.input} /></Field>
+                        </div>
+                        <Field label="Note (opzionale)">
+                          <textarea value={valutaForm.note} onChange={(e) => setValutaForm(p => ({...p, note: e.target.value}))} placeholder="es. Etichetta presente, piccolo difetto..." rows={2} style={{ ...S.input, resize: "vertical", minHeight: 42 }} />
+                        </Field>
+                        <button onClick={runValutazione} style={{ ...S.addBtn, background: "var(--accent)", color: "#111" }}>🧠 Valuta questo pezzo</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── STEP 3: RESULT SCREEN ── */}
             {valutaResult && (
               <div style={{ animation: "fadeIn 0.3s ease" }}>
-                <button onClick={() => setValutaResult(null)} style={S.backBtn}>
-                  <ArrowLeft size={14} /> Nuova valutazione
+                <button onClick={() => { setValutaResult(null); if (!selectedAddBrand) setSelectedAddBrand(null); }} style={S.backBtn}>
+                  <ArrowLeft size={14} /> {selectedAddBrand ? `Torna a ${selectedAddBrand}` : "Nuova valutazione"}
                 </button>
 
                 {/* Verdict */}
@@ -675,14 +765,12 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* User's own price */}
+                  {/* User price */}
                   {valutaResult.userPrice > 0 && (
                     <div style={{ padding: "12px 0", borderTop: "1px solid var(--border)", marginBottom: 6 }}>
                       <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>Il tuo prezzo di vendita</div>
                       <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
-                        <div>
-                          <span style={{ fontSize: 22, fontWeight: 600, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{valutaResult.userPrice}€</span>
-                        </div>
+                        <span style={{ fontSize: 22, fontWeight: 600, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{valutaResult.userPrice}€</span>
                         <div>
                           <div style={{ fontSize: 9, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 2 }}>Margine reale</div>
                           <div style={{ fontSize: 16, fontWeight: 600, color: valutaResult.userMargin >= 0 ? "var(--green)" : "var(--red)" }}>
@@ -691,12 +779,6 @@ export default function App() {
                           </div>
                         </div>
                       </div>
-                      {valutaResult.userPrice < valutaResult.priceMin && (
-                        <div style={{ fontSize: 10, color: "var(--yellow)", marginTop: 6 }}>⚠️ Il tuo prezzo è sotto la nostra stima minima — potresti vendere a di più</div>
-                      )}
-                      {valutaResult.userPrice > valutaResult.priceMax && (
-                        <div style={{ fontSize: 10, color: "var(--yellow)", marginTop: 6 }}>⚠️ Il tuo prezzo è sopra la nostra stima massima — potrebbe volerci più tempo</div>
-                      )}
                     </div>
                   )}
 
@@ -715,15 +797,6 @@ export default function App() {
                         transition: "width 0.5s ease",
                       }} />
                     </div>
-                    {valutaResult.confidence < 70 && (
-                      <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 8, lineHeight: 1.5 }}>
-                        {valutaResult.tier === "luxury"
-                          ? "Per i brand luxury il prezzo dipende molto dal modello specifico. Verifica sempre su Vinted."
-                          : valutaResult.confidence < 40
-                          ? "Brand non nel nostro database — la stima è approssimativa. Verifica su Vinted."
-                          : "Il tipo di capo non è nel dettaglio per questo brand. Verifica il prezzo reale."}
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -744,7 +817,7 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Vinted button */}
+                {/* Vinted */}
                 <a href={valutaResult.vintedUrl} target="_blank" rel="noopener noreferrer" style={{
                   display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                   padding: "14px 16px", borderRadius: 12,
@@ -752,24 +825,19 @@ export default function App() {
                   color: "#00bfa5", fontSize: 14, fontWeight: 500, textDecoration: "none",
                   fontFamily: "'DM Mono', monospace", marginBottom: 8,
                 }}>
-                  <Search size={16} />
-                  Verifica su Vinted
-                  <ExternalLink size={13} />
+                  <Search size={16} /> Verifica su Vinted <ExternalLink size={13} />
                 </a>
                 <div style={{ fontSize: 10, color: "var(--dim)", textAlign: "center", marginBottom: 16, lineHeight: 1.4 }}>
-                  Cerca: "{valutaResult.vintedQuery}" → confronta prezzi e preferiti degli annunci simili
+                  "{valutaResult.vintedQuery}" → confronta prezzi annunci simili
                 </div>
 
                 {/* Actions */}
                 <div style={{ display: "flex", gap: 10 }}>
-                  <button onClick={addFromValuta} style={{
-                    ...S.addBtn, flex: 1, background: "var(--accent)", color: "#111", fontSize: 13,
-                  }}>
+                  <button onClick={addFromValuta} style={{ ...S.addBtn, flex: 1, background: "var(--accent)", color: "#111", fontSize: 13 }}>
                     <Package size={15} /> Aggiungi all'inventario
                   </button>
-                  <button onClick={() => setValutaResult(null)} style={{
-                    ...S.addBtn, flex: 1, background: "transparent", border: "1px solid var(--border)",
-                    color: "var(--muted)", fontSize: 13,
+                  <button onClick={() => { setValutaResult(null); setValutaForm(p => ({ ...p, tipo: "", dettagli: "", costoAcquisto: "", prezzoVendita: "", note: "" })); }} style={{
+                    ...S.addBtn, flex: 1, background: "transparent", border: "1px solid var(--border)", color: "var(--muted)", fontSize: 13,
                   }}>
                     🧠 Valuta un altro
                   </button>

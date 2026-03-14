@@ -189,8 +189,11 @@ export default function App() {
 
   function runValutazione() {
     if (!valutaForm.brand.trim()) { showToast("Inserisci il brand!", "err"); return; }
-    if (!valutaForm.tipo) { showToast("Seleziona il tipo di capo!", "err"); return; }
-    const result = evaluateItem(valutaForm);
+    if (!valutaForm.tipo && !valutaForm.dettagli.trim()) { showToast("Seleziona un tipo di capo o un modello!", "err"); return; }
+    /* If model is set but no tipo, pass _default as tipo — the model matching overrides pricing */
+    const formData = { ...valutaForm };
+    if (!formData.tipo && formData.dettagli.trim()) formData.tipo = "_default";
+    const result = evaluateItem(formData);
     const userPrice = parseFloat(valutaForm.prezzoVendita);
     if (userPrice > 0) {
       const costo = parseFloat(valutaForm.costoAcquisto) || 0;
@@ -614,7 +617,8 @@ export default function App() {
             {/* ── FORM ── */}
             {selectedAddBrand && !valutaResult && (() => {
               const info = BRAND_INFO[selectedAddBrand] || {};
-              const { modelNames, types } = getModelsForBrand(selectedAddBrand);
+              const { modelNames, types, models } = getModelsForBrand(selectedAddBrand);
+              const hasModel = modelNames.some(m => m.toLowerCase() === (valutaForm.dettagli || "").toLowerCase());
 
               return (
                 <div>
@@ -625,25 +629,51 @@ export default function App() {
                   </div>
 
                   <div style={S.card}>
-                    {/* Modello autocomplete */}
-                    <Field label="Modello (opzionale)">
-                      <AutocompleteInput
-                        value={valutaForm.dettagli}
-                        onChange={(v) => setValutaForm(p => ({ ...p, dettagli: v }))}
-                        options={modelNames}
-                        placeholder="es. Air Force 1, Tech Fleece, Nuptse 700..."
-                        style={S.input}
-                      />
-                      <div style={{ fontSize: 9, color: "var(--dim)", marginTop: 3 }}>Scrivi per cercare tra {modelNames.length} modelli — oppure lascia vuoto</div>
-                    </Field>
+                    {/* Toggle: conosci il modello? */}
+                    <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Come vuoi identificare il pezzo?</div>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                      <button onClick={() => setValutaForm(p => ({ ...p, dettagli: "", tipo: "" }))}
+                        style={{
+                          flex: 1, padding: "10px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer",
+                          border: !valutaForm.dettagli && !hasModel ? "1px solid var(--accent)" : "1px solid var(--border)",
+                          background: !valutaForm.dettagli && !hasModel ? "rgba(212,245,94,0.1)" : "var(--surface)",
+                          color: !valutaForm.dettagli && !hasModel ? "var(--accent)" : "var(--muted)",
+                        }}>📦 Per tipo di capo</button>
+                      <button onClick={() => setValutaForm(p => ({ ...p, tipo: "", dettagli: "" }))}
+                        style={{
+                          flex: 1, padding: "10px 12px", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer",
+                          border: valutaForm.dettagli || hasModel ? "1px solid var(--accent)" : "1px solid var(--border)",
+                          background: valutaForm.dettagli || hasModel ? "rgba(212,245,94,0.1)" : "var(--surface)",
+                          color: valutaForm.dettagli || hasModel ? "var(--accent)" : "var(--muted)",
+                        }}>🔍 Conosco il modello</button>
+                    </div>
 
-                    {/* Tipo di capo — sempre dropdown */}
-                    <Field label="Tipo di capo *">
-                      <select value={valutaForm.tipo} onChange={(e) => setValutaForm(p => ({...p, tipo: e.target.value}))} style={S.input}>
-                        <option value="">— Seleziona —</option>
-                        {types.map(t => <option key={t.id} value={t.name}>{t.name} ({t.min}–{t.max}€)</option>)}
-                      </select>
-                    </Field>
+                    {/* Modello autocomplete — solo se ha iniziato a scrivere o premuto il toggle */}
+                    {(valutaForm.dettagli !== undefined) && (
+                      <Field label="Modello">
+                        <AutocompleteInput
+                          value={valutaForm.dettagli}
+                          onChange={(v) => setValutaForm(p => ({ ...p, dettagli: v, tipo: "" }))}
+                          options={modelNames}
+                          placeholder="es. Air Force 1, Tech Fleece, Nuptse 700..."
+                          style={S.input}
+                        />
+                        {hasModel && (() => {
+                          const m = models.find(mm => mm.name.toLowerCase() === valutaForm.dettagli.toLowerCase());
+                          return m ? <div style={{ fontSize: 10, color: "var(--dim)", marginTop: 4, lineHeight: 1.4 }}>{m.note}</div> : null;
+                        })()}
+                      </Field>
+                    )}
+
+                    {/* Tipo di capo — solo se NON ha un modello valido */}
+                    {!hasModel && (
+                      <Field label="Tipo di capo *">
+                        <select value={valutaForm.tipo} onChange={(e) => setValutaForm(p => ({...p, tipo: e.target.value, dettagli: ""}))} style={S.input}>
+                          <option value="">— Seleziona —</option>
+                          {types.map(t => <option key={t.id} value={t.name}>{t.name} ({t.min}–{t.max}€)</option>)}
+                        </select>
+                      </Field>
+                    )}
 
                     <div style={S.formRow}>
                       <Field label="Genere"><select value={valutaForm.genere} onChange={(e) => setValutaForm(p => ({...p, genere: e.target.value}))} style={S.input}>{GENERI.map(g => <option key={g}>{g}</option>)}</select></Field>

@@ -1483,6 +1483,21 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
   }
   let { min, max } = priceRange;
 
+  /* Auto-detect tipo from model for sizing/seasonality when tipo is missing */
+  const SHOE_KW = ["force","af1","dunk","air max","vapormax","cortez","blazer mid","huarache","pegasus","shox","monarch","jordan","samba","gazelle","superstar","stan smith","campus","forum","ultraboost","nmd","yeezy","spezial","handball","sl 72","country","ozweego","zx","continental"];
+  let effectiveTipo = tipo === "_default" ? null : tipo;
+  if (!effectiveTipo && modelMatch) {
+    const mk = modelMatch.toLowerCase();
+    if (SHOE_KW.some(k => mk.includes(k))) effectiveTipo = "Sneakers";
+    else if (mk.includes("jacket") || mk.includes("coat") || mk.includes("detroit") || mk.includes("trucker") || mk.includes("sherpa") || mk.includes("harrington") || mk.includes("firebird") || mk.includes("beckenbauer") || mk.includes("windrunner") || mk.includes("sailing") || mk.includes("windbreaker") || mk.includes("nuptse") || mk.includes("baltoro") || mk.includes("himalayan") || mk.includes("denali") || mk.includes("gore")) effectiveTipo = "Giacca";
+    else if (mk.includes("fleece") || mk.includes("weave") || mk.includes("hoodie")) effectiveTipo = "Felpa con cappuccio";
+    else if (mk.includes("501") || mk.includes("505") || mk.includes("511") || mk.includes("512") || mk.includes("517") || mk.includes("550") || mk.includes("ribcage")) effectiveTipo = "Jeans";
+    else if (mk.includes("polo") || mk.includes("l.12")) effectiveTipo = "Polo";
+    else if (mk.includes("beanie")) effectiveTipo = "Cappello/Berretto";
+    else effectiveTipo = "Felpa";
+  }
+  if (!effectiveTipo) effectiveTipo = "Felpa"; /* ultimo fallback */
+
   /* 2. Moltiplicatore condizione */
   const cond = CONDITION_MULT[condizione] || CONDITION_MULT["Ottime condizioni"];
   min = Math.round(min * cond.mult);
@@ -1490,7 +1505,7 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
 
   /* 3. Moltiplicatore taglia */
   const genLower = (genere || "unisex").toLowerCase();
-  const isShoe = ["Sneakers","Scarpe","Stivali","Sandali","Ciabatte/Slides"].includes(tipo);
+  const isShoe = ["Sneakers","Scarpe","Stivali","Sandali","Ciabatte/Slides"].includes(effectiveTipo);
   const sizeMap = isShoe ? SIZE_POP.scarpe : (SIZE_POP[genLower] || SIZE_POP.unisex);
   const sizeMult = sizeMap[taglia] || (taglia === "Unica" ? 1.0 : 0.85);
   min = Math.round(min * sizeMult);
@@ -1508,7 +1523,7 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
 
   /* 4. Stagionalità */
   const currentMonth = new Date().getMonth() + 1;
-  const hotMonths = SEASON_HOT[tipo];
+  const hotMonths = SEASON_HOT[effectiveTipo];
   let seasonMult = 1.0;
   let seasonLabel = "Tutto l'anno — nessun impatto stagionale";
   let seasonColor = "green";
@@ -1632,7 +1647,7 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
   /* 9. Keyword per ricerca Vinted */
   const genderKeyword = genere === "Uomo" ? "uomo" : genere === "Donna" ? "donna" : "";
   const colorKeyword = colore && !["Multicolore"].includes(colore) ? colore.split("/")[0] : "";
-  const searchParts = [brand, tipo, dettagli, colorKeyword, genderKeyword, taglia !== "Unica" ? taglia : ""].filter(Boolean).map(s => s.trim()).filter(s => s.length > 0);
+  const searchParts = [brand, effectiveTipo !== "Felpa" || !dettagli ? effectiveTipo : "", dettagli, colorKeyword, genderKeyword, taglia !== "Unica" ? taglia : ""].filter(Boolean).map(s => s.trim()).filter(s => s.length > 0 && s !== "_default");
   const vintedQuery = searchParts.join(" ");
   const vintedUrl = `https://www.vinted.it/catalog?search_text=${encodeURIComponent(vintedQuery)}&order=relevance`;
 
@@ -1669,7 +1684,7 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
       else { verdict = "Ci perdi soldi"; verdictColor = "var(--red)"; verdictIcon = "🔴"; }
     }
     return {
-      brand: brandName, tipo, priceMin: learnedMin, priceMax: learnedMax,
+      brand: brandName, tipo: effectiveTipo, priceMin: learnedMin, priceMax: learnedMax,
       confidence, marginMin: lMarginMin, marginMax: lMarginMax,
       marginPctMin: lMarginPctMin, marginPctMax: lMarginPctMax,
       verdict, verdictColor, verdictIcon,
@@ -1679,7 +1694,7 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
   }
 
   return {
-    brand: brandName, tipo, priceMin: min, priceMax: max,
+    brand: brandName, tipo: effectiveTipo, priceMin: min, priceMax: max,
     confidence, marginMin, marginMax, marginPctMin, marginPctMax,
     verdict, verdictColor, verdictIcon,
     indicators, vintedUrl, vintedQuery,

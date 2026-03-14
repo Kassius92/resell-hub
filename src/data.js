@@ -1048,14 +1048,83 @@ export const BRAND_LIST = [
 const PRICE_DB = {
   "Nike": {
     _tier: "streetwear", _demand: 5, _fakeRisk: "medio", _conf: 80,
-    "T-shirt": { min: 8, max: 15 }, "Polo": { min: 10, max: 18 },
-    "Felpa": { min: 18, max: 35 }, "Felpa con cappuccio": { min: 20, max: 40 },
-    "Giacca": { min: 25, max: 50 }, "Giacca puffer": { min: 35, max: 70 },
-    "Giacca a vento": { min: 20, max: 45 }, "Pantaloni": { min: 12, max: 25 },
-    "Tuta/Tracksuit": { min: 25, max: 50 }, "Shorts": { min: 8, max: 16 },
-    "Sneakers": { min: 25, max: 65 }, "Zaino": { min: 15, max: 35 },
-    "Cappello/Berretto": { min: 8, max: 18 },
-    _default: { min: 10, max: 25 },
+    /* ─── SNEAKERS per modello ─── */
+    "Sneakers": { min: 20, max: 50 },
+    /* ─── ABBIGLIAMENTO per tipo ─── */
+    "T-shirt": { min: 6, max: 14 },
+    "T-shirt vintage": { min: 15, max: 35 },
+    "Polo": { min: 10, max: 18 },
+    "Felpa": { min: 14, max: 28 },
+    "Felpa con cappuccio": { min: 16, max: 32 },
+    "Giacca": { min: 22, max: 45 },
+    "Giacca puffer": { min: 30, max: 60 },
+    "Giacca a vento": { min: 18, max: 40 },
+    "Gilet/Smanicato": { min: 18, max: 35 },
+    "Pantaloni": { min: 12, max: 24 },
+    "Shorts": { min: 6, max: 14 },
+    "Tuta/Tracksuit": { min: 22, max: 45 },
+    "Canotta/Top": { min: 5, max: 12 },
+    "Costume da bagno": { min: 6, max: 14 },
+    /* ─── ACCESSORI ─── */
+    "Zaino": { min: 14, max: 32 },
+    "Borsa": { min: 10, max: 25 },
+    "Cappello/Berretto": { min: 7, max: 16 },
+    "Ciabatte/Slides": { min: 8, max: 18 },
+    "Sandali": { min: 8, max: 18 },
+    _default: { min: 8, max: 22 },
+    /* ─── MODELLI SPECIFICI (keyword match su dettagli) ─── */
+    _models: {
+      /* === SNEAKERS === */
+      "air force 1": { min: 30, max: 55, conf: 88, note: "Best seller assoluto. Le bianche classiche le più richieste." },
+      "af1": { min: 30, max: 55, conf: 88, note: "Air Force 1 — best seller." },
+      "dunk low": { min: 35, max: 70, conf: 85, note: "Fortissime, le Panda B/N sono le più vendute. Collab = prezzo doppio." },
+      "dunk high": { min: 28, max: 55, conf: 83, note: "Meno richieste delle Low ma comunque solide." },
+      "air max 90": { min: 30, max: 55, conf: 85, note: "Classico intramontabile, sempre richieste." },
+      "air max 95": { min: 35, max: 65, conf: 83, note: "Iconiche, il design a onde è inconfondibile." },
+      "air max 97": { min: 30, max: 60, conf: 83, note: "Silver Bullet è la più ricercata." },
+      "air max 270": { min: 25, max: 50, conf: 85, note: "Molto comode, si vendono bene." },
+      "air max plus": { min: 35, max: 70, conf: 82, note: "Le TN sono cult, soprattutto in Italia e Francia." },
+      "air max tn": { min: 35, max: 70, conf: 82, note: "TN / Air Max Plus — cult in Europa." },
+      "tn": { min: 35, max: 70, conf: 82, note: "Nike TN — cult." },
+      "air max 1": { min: 28, max: 50, conf: 83, note: "OG del 1987, classico senza tempo." },
+      "vapormax": { min: 30, max: 60, conf: 80, note: "Design futuristico, mercato variabile." },
+      "cortez": { min: 18, max: 35, conf: 85, note: "Classico vintage, trend Y2K." },
+      "blazer": { min: 20, max: 40, conf: 83, note: "Mid e Low, stile retro basketball." },
+      "blazer mid": { min: 22, max: 42, conf: 83, note: "La versione mid è la più richiesta." },
+      "huarache": { min: 18, max: 38, conf: 82, note: "Meno in trend rispetto a qualche anno fa." },
+      "react": { min: 20, max: 40, conf: 78, note: "Comfort running, mercato variabile." },
+      "waffle": { min: 20, max: 42, conf: 78, note: "Retro runner, in crescita." },
+      "pegasus": { min: 18, max: 35, conf: 80, note: "Running shoe, mercato stabile." },
+      "air jordan 1": { min: 45, max: 120, conf: 70, note: "Icona. Prezzo varia enormemente per colorway. Attenzione falsi." },
+      "jordan 1": { min: 45, max: 120, conf: 70, note: "Icona. Colorway = prezzo. Falsi ovunque." },
+      "air jordan 4": { min: 50, max: 130, conf: 68, note: "Una delle Jordan più ricercate. Falsi comuni." },
+      "jordan 4": { min: 50, max: 130, conf: 68, note: "Molto ricercata. Attenzione falsi." },
+      "jordan 11": { min: 50, max: 120, conf: 68, note: "Classica, soprattutto Bred e Concord." },
+      "air jordan 3": { min: 45, max: 110, conf: 68, note: "White Cement è iconica." },
+      "sb dunk": { min: 40, max: 90, conf: 75, note: "SB = skateboarding. Alcune collab valgono molto di più." },
+      "shox": { min: 20, max: 40, conf: 80, note: "Trend Y2K, tornate di moda." },
+      "monarch": { min: 10, max: 22, conf: 88, note: "Dad shoe, prezzo basso ma vendita costante." },
+      /* === APPAREL — TECH FLEECE === */
+      "tech fleece": { min: 25, max: 50, conf: 88, note: "La linea di abbigliamento Nike più venduta su Vinted. Felpe e pantaloni." },
+      "tech fleece felpa": { min: 28, max: 50, conf: 88, note: "Tech Fleece hoodie/felpa — vendita velocissima." },
+      "tech fleece pantaloni": { min: 22, max: 42, conf: 88, note: "Jogger Tech Fleece — altissima domanda." },
+      "tech fleece completo": { min: 45, max: 85, conf: 85, note: "Set felpa + pantaloni. Margine ottimo se venduto insieme." },
+      "tech fleece windrunner": { min: 30, max: 55, conf: 85, note: "Windrunner Tech Fleece — tra le più ricercate." },
+      /* === APPAREL — VINTAGE / LOGO === */
+      "vintage swoosh": { min: 22, max: 50, conf: 78, note: "Felpe/T-shirt con logo Swoosh grande anni 90. Molto ricercate." },
+      "big swoosh": { min: 20, max: 45, conf: 78, note: "Logo grande — più appeal su Vinted." },
+      "vintage": { min: 18, max: 45, conf: 72, note: "Generico vintage Nike. Prezzo dipende molto dal pezzo." },
+      "travis scott": { min: 80, max: 300, conf: 55, note: "Collaborazione Travis Scott. Valore altissimo. ALTO rischio falsi." },
+      "off-white": { min: 80, max: 350, conf: 50, note: "Collaborazione Off-White. Prezzo enorme. Falsi OVUNQUE." },
+      "sacai": { min: 60, max: 180, conf: 55, note: "Collaborazione Sacai. Valore alto." },
+      /* === APPAREL — ALTRE LINEE === */
+      "acg": { min: 25, max: 55, conf: 78, note: "Linea outdoor Nike. Trend gorpcore in crescita." },
+      "sb": { min: 18, max: 40, conf: 75, note: "Linea skateboard." },
+      "dri-fit": { min: 8, max: 18, conf: 82, note: "Performance/sport. Margini bassi." },
+      "pro": { min: 6, max: 14, conf: 82, note: "Linea base fitness. Margini minimi." },
+      "sportswear": { min: 12, max: 25, conf: 78, note: "Linea generica Nike Sportswear." },
+      "windrunner": { min: 20, max: 42, conf: 82, note: "Giacca Windrunner classica. Buona domanda." },
+    },
   },
   "Adidas": {
     _tier: "streetwear", _demand: 5, _fakeRisk: "medio", _conf: 80,
@@ -1435,8 +1504,31 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
   const brandData = db || UNKNOWN_BRAND;
   const brandName = brandKey || brand || "Sconosciuto";
 
-  /* 1. Prezzo base */
-  const priceRange = (db && db[tipo]) || (db && db._default) || UNKNOWN_BRAND._default;
+  /* 1. Prezzo base — controlla prima i modelli specifici, poi tipo, poi default */
+  let priceRange = null;
+  let modelMatch = null;
+  let modelNote = null;
+  let modelConf = null;
+  if (db && db._models && dettagli && dettagli.trim().length > 0) {
+    const det = dettagli.toLowerCase().trim();
+    /* Cerca il match più lungo (più specifico) tra i modelli */
+    let bestKey = null, bestLen = 0;
+    for (const key of Object.keys(db._models)) {
+      if (det.includes(key.toLowerCase()) && key.length > bestLen) {
+        bestKey = key; bestLen = key.length;
+      }
+    }
+    if (bestKey) {
+      const m = db._models[bestKey];
+      priceRange = { min: m.min, max: m.max };
+      modelMatch = bestKey;
+      modelNote = m.note || null;
+      modelConf = m.conf || null;
+    }
+  }
+  if (!priceRange) {
+    priceRange = (db && db[tipo]) || (db && db._default) || UNKNOWN_BRAND._default;
+  }
   let { min, max } = priceRange;
 
   /* 2. Moltiplicatore condizione */
@@ -1498,12 +1590,14 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
   /* 5. Confidenza */
   let confidence = brandData._conf || 40;
   /* Bonus/malus confidenza */
+  if (modelConf) confidence = modelConf; /* modello specifico trovato — usa la sua confidenza */
   if (!db) confidence = Math.min(confidence, 35); /* brand sconosciuto */
-  if (db && !db[tipo]) confidence -= 8; /* tipo non specifico nel db */
+  if (!modelMatch && db && !db[tipo]) confidence -= 8; /* tipo non specifico nel db e nessun modello */
   if (brandData._tier === "luxury") confidence -= 5; /* luxury = modello conta tanto */
   if (["M","L","40","41","42"].includes(taglia)) confidence += 3; /* taglia comune = più dati */
   if (taglia === "Unica") confidence += 5; /* accessori = prezzo più stabile */
-  if (dettagli && dettagli.trim().length > 3) confidence += 5; /* ha specificato il modello */
+  if (modelMatch) confidence += 5; /* ha matchato un modello specifico */
+  else if (dettagli && dettagli.trim().length > 3) confidence += 3; /* ha specificato dettagli ma no match */
   confidence = Math.max(20, Math.min(95, confidence));
 
   /* 6. Margine */
@@ -1533,6 +1627,14 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
 
   /* 8. Indicatori individuali */
   const indicators = [];
+
+  /* Model match */
+  if (modelMatch) {
+    indicators.push({ label: `✅ Modello riconosciuto: ${modelMatch.toUpperCase()} — stima specifica`, color: "green" });
+    if (modelNote) indicators.push({ label: `💡 ${modelNote}`, color: "green" });
+  } else if (dettagli && dettagli.trim().length > 0 && db && db._models) {
+    indicators.push({ label: "Modello non riconosciuto — stima basata sul tipo generico. Verifica su Vinted.", color: "yellow" });
+  }
 
   /* Brand */
   const demandLabels = { 5: "Domanda altissima", 4: "Domanda alta", 3: "Domanda media", 2: "Domanda bassa", 1: "Domanda molto bassa" };
@@ -1620,7 +1722,7 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
       marginPctMin: lMarginPctMin, marginPctMax: lMarginPctMax,
       verdict, verdictColor, verdictIcon,
       indicators, vintedUrl, vintedQuery,
-      tier: brandData._tier, learnNote,
+      tier: brandData._tier, learnNote, modelMatch,
     };
   }
 
@@ -1629,7 +1731,7 @@ export function evaluateItem({ brand, tipo, genere, taglia, condizione, costoAcq
     confidence, marginMin, marginMax, marginPctMin, marginPctMax,
     verdict, verdictColor, verdictIcon,
     indicators, vintedUrl, vintedQuery,
-    tier: brandData._tier, learnNote,
+    tier: brandData._tier, learnNote, modelMatch,
   };
 }
 

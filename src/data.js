@@ -1049,7 +1049,7 @@ export const BRAND_INFO = {
 /* Estrae i modelli disponibili dal PRICE_DB per un brand */
 export function getModelsForBrand(brandName) {
   const brandKey = Object.keys(PRICE_DB).find(k => k.toLowerCase() === (brandName || "").toLowerCase());
-  if (!brandKey) return { types: [], models: [] };
+  if (!brandKey) return { types: [], models: [], modelNames: [] };
   const db = PRICE_DB[brandKey];
 
   /* Tipi di capo generici */
@@ -1063,7 +1063,41 @@ export function getModelsForBrand(brandName) {
     min: val.min, max: val.max, conf: val.conf || 80, note: val.note || "", isModel: true,
   })) : [];
 
-  return { types, models };
+  /* Nomi modelli per autocomplete */
+  const modelNames = models.map(m => m.name);
+
+  return { types, models, modelNames };
+}
+
+/* Rileva automaticamente il tipo di capo dal nome modello */
+const SHOE_MODELS = ["air force","af1","dunk","air max","vapormax","cortez","blazer","huarache","react","waffle","pegasus","shox","monarch","jordan","sb dunk","samba","gazelle","superstar","stan smith","campus","forum","ultraboost","nmd","yeezy","spezial","handball","sl 72","country","ozweego","zx","continental","501","505","511","512","517","550"];
+const JACKET_MODELS = ["detroit","chore","active","michigan","windrunner","sailing","windbreaker","firebird","beckenbauer","harrington","trucker","sherpa","acg"];
+const JEANS_MODELS = ["501","505","511","512","517","550","ribcage","ex boyfriend","double knee","carpenter"];
+const HAT_MODELS = ["beanie","cappell"];
+const POLO_MODELS = ["polo","l.12.12","classic fit","slim fit"];
+const KNIT_MODELS = ["bear","polo bear","cable","cable knit"];
+
+export function detectTipoFromModel(modelName) {
+  if (!modelName) return null;
+  const lk = modelName.toLowerCase();
+  /* Jeans first (501 etc overlap with shoes) */
+  if (JEANS_MODELS.some(m => lk === m || lk.startsWith(m + " "))) {
+    if (["501","505","511","512","517","550","ribcage","ex boyfriend"].some(m => lk.includes(m))) return "Jeans";
+    if (["double knee","carpenter"].some(m => lk.includes(m))) return "Pantaloni";
+  }
+  if (JACKET_MODELS.some(m => lk.includes(m))) return "Giacca";
+  if (lk.includes("tech fleece pantaloni") || lk.includes("tech fleece jogger")) return "Pantaloni";
+  if (lk.includes("tech fleece completo")) return "Tuta/Tracksuit";
+  if (lk.includes("tech fleece") || lk.includes("reverse weave") || lk.includes("swoosh") || lk.includes("trefoil") || lk.includes("script") || lk.includes("big logo") || lk.includes("flag") || lk.includes("colorblock")) return "Felpa con cappuccio";
+  if (HAT_MODELS.some(m => lk.includes(m))) return "Cappello/Berretto";
+  if (POLO_MODELS.some(m => lk.includes(m)) && !lk.includes("bear") && !lk.includes("sport")) return "Polo";
+  if (KNIT_MODELS.some(m => lk.includes(m))) return "Maglione";
+  if (lk.includes("vintage") && !SHOE_MODELS.some(m => lk.includes(m))) return "Felpa";
+  if (lk.includes("oxford")) return "Camicia";
+  if (lk.includes("chemise") || lk.includes("live") || lk.includes("sport") || lk.includes("polo sport")) return "Polo";
+  /* Shoes last — most common */
+  if (SHOE_MODELS.some(m => lk.includes(m))) return "Sneakers";
+  return null;
 }
 
 /* ─── PRICE DATABASE ───

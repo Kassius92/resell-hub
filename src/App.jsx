@@ -6,7 +6,7 @@ import {
 import { RotateCcw, Search, Plus, Package, LayoutDashboard, Tag, BookOpen, Trash2, Check, Download, Info, ChevronDown, ChevronRight, ArrowLeft, Smartphone, ExternalLink, PlusCircle, Pencil, Lock, ChevronUp, ShoppingBag, TrendingUp, Zap, DollarSign, Clock } from "lucide-react";
 import {
   BRANDS, GUIDA, CATEGORIE, FONTI, TAGLIE, CONDIZIONI, GENERI, PIE_COLORS, calcScore,
-  TIPI_CAPO, BRAND_LIST, BRAND_INFO, COLORI, LOGO_TYPES, evaluateItem, recordSale, getRecommendations, getModelsForBrand
+  TIPI_CAPO, BRAND_LIST, BRAND_INFO, COLORI, LOGO_TYPES, evaluateItem, recordSale, getRecommendations, getModelsForBrand, detectTipoFromModel
 } from "./data";
 
 /* ─── STORAGE ─── */
@@ -87,7 +87,7 @@ function DemandDots({ level }) {
 }
 
 /* ─── AUTOCOMPLETE INPUT ─── */
-function AutocompleteInput({ value, onChange, options, placeholder, style }) {
+function AutocompleteInput({ value, onChange, options, placeholder, style, required }) {
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
   const ref = useRef(null);
@@ -96,6 +96,7 @@ function AutocompleteInput({ value, onChange, options, placeholder, style }) {
     ? options.filter(o => o.toLowerCase().includes(value.toLowerCase()))
     : options;
   const exactMatch = options.some(o => o.toLowerCase() === value.toLowerCase());
+  const hasPartial = filtered.length > 0 && value.trim().length > 0;
 
   useEffect(() => {
     function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
@@ -113,24 +114,24 @@ function AutocompleteInput({ value, onChange, options, placeholder, style }) {
         placeholder={placeholder}
         style={{
           ...style,
-          borderColor: value.trim().length > 0 && !exactMatch ? "var(--red)" : focused ? "var(--accent)" : undefined,
+          borderColor: focused ? "var(--accent)" : exactMatch ? "var(--green)" : undefined,
         }}
       />
-      {value.trim().length > 0 && !exactMatch && (
-        <div style={{ fontSize: 9, color: "var(--red)", marginTop: 2 }}>Seleziona dalla lista</div>
+      {exactMatch && value.trim().length > 0 && (
+        <div style={{ fontSize: 9, color: "var(--green)", marginTop: 2 }}>✓ Modello riconosciuto</div>
       )}
       {open && filtered.length > 0 && (
         <div style={{
           position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
-          maxHeight: 180, overflowY: "auto",
+          maxHeight: 200, overflowY: "auto",
           background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
           marginTop: 4, boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
         }}>
-          {filtered.map(o => (
+          {filtered.slice(0, 15).map(o => (
             <div key={o}
               onMouseDown={(e) => { e.preventDefault(); onChange(o); setOpen(false); }}
               style={{
-                padding: "8px 12px", fontSize: 12, cursor: "pointer",
+                padding: "9px 12px", fontSize: 12, cursor: "pointer",
                 color: o.toLowerCase() === value.toLowerCase() ? "var(--accent)" : "var(--text)",
                 background: o.toLowerCase() === value.toLowerCase() ? "rgba(212,245,94,0.1)" : "transparent",
               }}
@@ -188,11 +189,13 @@ export default function App() {
 
   function runValutazione() {
     if (!valutaForm.brand.trim()) { showToast("Inserisci il brand!", "err"); return; }
-    if (!BRAND_LIST.some(b => b.toLowerCase() === valutaForm.brand.toLowerCase())) { showToast("Brand non nel database! Seleziona dalla lista.", "err"); return; }
-    if (!valutaForm.tipo.trim()) { showToast("Inserisci il tipo di capo!", "err"); return; }
-    if (!TIPI_CAPO.some(t => t.toLowerCase() === valutaForm.tipo.toLowerCase())) { showToast("Tipo di capo non valido! Seleziona dalla lista.", "err"); return; }
-    const result = evaluateItem(valutaForm);
-    /* Se l'utente ha inserito il suo prezzo vendita, ricalcola margini con quello */
+    /* Auto-detect tipo if model is set */
+    let finalTipo = valutaForm.tipo;
+    const autoTipo = detectTipoFromModel(valutaForm.dettagli);
+    if (autoTipo) finalTipo = autoTipo;
+    if (!finalTipo) { showToast("Seleziona il tipo di capo!", "err"); return; }
+    const formData = { ...valutaForm, tipo: finalTipo };
+    const result = evaluateItem(formData);
     const userPrice = parseFloat(valutaForm.prezzoVendita);
     if (userPrice > 0) {
       const costo = parseFloat(valutaForm.costoAcquisto) || 0;
@@ -582,11 +585,11 @@ export default function App() {
         {tab === "aggiungi" && (
           <div style={{ animation: "fadeIn 0.3s ease", maxWidth: 500 }}>
 
-            {/* ── STEP 1: BRAND ── */}
+            {/* ── BRAND SELECT ── */}
             {!selectedAddBrand && !valutaResult && (
               <div>
                 <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Passo 1</div>
+                  <div style={{ fontSize: 11, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Valuta un pezzo</div>
                   <div style={{ fontSize: 16, color: "var(--text)", fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>Che brand è?</div>
                 </div>
                 {BRAND_LIST.map((b, i) => {
@@ -596,7 +599,7 @@ export default function App() {
                       style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         padding: "14px 16px", background: "var(--surface)", border: "1px solid var(--border)",
-                        borderRadius: 10, marginBottom: 8, cursor: "pointer", transition: "border-color 0.15s",
+                        borderRadius: 10, marginBottom: 8, cursor: "pointer",
                         animation: `slideUp 0.2s ease ${i * 0.03}s forwards`, opacity: 0,
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.borderColor = info.color || "var(--accent)"}
@@ -613,168 +616,91 @@ export default function App() {
               </div>
             )}
 
-            {/* ── STEP 2: MODELLO ── */}
-            {selectedAddBrand && !valutaForm.tipo && !valutaForm.dettagli && !valutaResult && (() => {
-              const { types, models } = getModelsForBrand(selectedAddBrand);
+            {/* ── FORM ── */}
+            {selectedAddBrand && !valutaResult && (() => {
               const info = BRAND_INFO[selectedAddBrand] || {};
-
-              /* Categorize models */
-              const shoeWords = ["force","af1","dunk","air max","vapormax","cortez","blazer","huarache","react","waffle","pegasus","shox","monarch","jordan","samba","gazelle","superstar","stan smith","campus","forum","ultraboost","nmd","yeezy","spezial","handball","sl 72","country","ozweego","zx","continental"];
-              const shoeModels = models.filter(m => shoeWords.some(w => m.id.includes(w)));
-              const apparelModels = models.filter(m => !shoeWords.some(w => m.id.includes(w)));
+              const { modelNames, types } = getModelsForBrand(selectedAddBrand);
+              const detectedTipo = detectTipoFromModel(valutaForm.dettagli);
+              const tipoLocked = !!detectedTipo;
+              const currentTipo = detectedTipo || valutaForm.tipo;
 
               return (
                 <div>
                   <button onClick={() => { setSelectedAddBrand(null); setValutaForm(p => ({ ...p, tipo: "", dettagli: "" })); }} style={S.backBtn}><ArrowLeft size={14} /> Tutti i brand</button>
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 11, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Passo 2</div>
-                    <div style={{ fontSize: 16, color: info.color || "var(--text)", fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>Cosa stai valutando di {selectedAddBrand}?</div>
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 18, fontWeight: 600, color: info.color || "var(--text)", fontFamily: "'Playfair Display', serif" }}>{selectedAddBrand}</div>
+                    <div style={{ fontSize: 11, color: "var(--dim)", marginTop: 2 }}>Inserisci i dettagli del pezzo</div>
                   </div>
 
-                  {/* Sneakers models */}
-                  {shoeModels.length > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>👟 Sneakers / Scarpe</div>
-                      {shoeModels.map((m, i) => (
-                        <div key={m.id} onClick={() => setValutaForm(p => ({ ...p, brand: selectedAddBrand, dettagli: m.name, tipo: "Sneakers" }))}
-                          style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)",
-                            borderRadius: 8, marginBottom: 6, cursor: "pointer", transition: "border-color 0.15s",
-                            animation: `slideUp 0.15s ease ${i * 0.02}s forwards`, opacity: 0,
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.borderColor = info.color || "var(--accent)"}
-                          onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
-                        >
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>{m.name}</div>
-                            {m.note && <div style={{ fontSize: 10, color: "var(--dim)", marginTop: 2, maxWidth: 240 }}>{m.note.split(".")[0]}</div>}
-                          </div>
-                          <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
-                            <div style={{ fontSize: 12, fontWeight: 500, color: "var(--accent)", fontFamily: "'DM Mono', monospace" }}>{m.min}–{m.max}€</div>
-                            {m.conf >= 85 && <div style={{ fontSize: 8, color: "var(--green)" }}>● Preciso</div>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Apparel models */}
-                  {apparelModels.length > 0 && (
-                    <div style={{ marginBottom: 16 }}>
-                      <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>👕 Abbigliamento / Modelli</div>
-                      {apparelModels.map((m, i) => (
-                        <div key={m.id} onClick={() => {
-                          /* Auto-detect tipo */
-                          let autoTipo = types.length > 0 ? types[0].name : "Felpa";
-                          const lk = m.id.toLowerCase();
-                          if (lk.includes("fleece") || lk.includes("felpa") || lk.includes("hoodie") || lk.includes("weave") || lk.includes("windrunner")) autoTipo = "Felpa con cappuccio";
-                          else if (lk.includes("jacket") || lk.includes("coat") || lk.includes("firebird") || lk.includes("beckenbauer") || lk.includes("sailing") || lk.includes("windbreaker")) autoTipo = "Giacca";
-                          else if (lk.includes("jean") || lk.includes("501") || lk.includes("505") || lk.includes("511") || lk.includes("512") || lk.includes("517") || lk.includes("550") || lk.includes("ribcage") || lk.includes("double knee") || lk.includes("carpenter")) autoTipo = "Jeans";
-                          else if (lk.includes("polo") || lk.includes("l.12")) autoTipo = "Polo";
-                          else if (lk.includes("beanie") || lk.includes("cappell")) autoTipo = "Cappello/Berretto";
-                          else if (lk.includes("vintage") || lk.includes("swoosh") || lk.includes("trefoil") || lk.includes("logo") || lk.includes("script")) autoTipo = "Felpa";
-                          else if (lk.includes("bear") || lk.includes("oxford") || lk.includes("cable")) autoTipo = "Maglione";
-                          else if (lk.includes("trucker") || lk.includes("sherpa") || lk.includes("harrington") || lk.includes("detroit") || lk.includes("chore") || lk.includes("active") || lk.includes("michigan")) autoTipo = "Giacca";
-                          setValutaForm(p => ({ ...p, brand: selectedAddBrand, dettagli: m.name, tipo: autoTipo }));
+                  <div style={S.card}>
+                    {/* Modello autocomplete */}
+                    <Field label="Modello (opzionale)">
+                      <AutocompleteInput
+                        value={valutaForm.dettagli}
+                        onChange={(v) => {
+                          setValutaForm(p => ({ ...p, dettagli: v }));
+                          const auto = detectTipoFromModel(v);
+                          if (auto) setValutaForm(p => ({ ...p, tipo: auto }));
                         }}
-                          style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--border)",
-                            borderRadius: 8, marginBottom: 6, cursor: "pointer", transition: "border-color 0.15s",
-                            animation: `slideUp 0.15s ease ${i * 0.02}s forwards`, opacity: 0,
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.borderColor = info.color || "var(--accent)"}
-                          onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
-                        >
-                          <div>
-                            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>{m.name}</div>
-                            {m.note && <div style={{ fontSize: 10, color: "var(--dim)", marginTop: 2, maxWidth: 240 }}>{m.note.split(".")[0]}</div>}
-                          </div>
-                          <div style={{ textAlign: "right", flexShrink: 0, marginLeft: 10 }}>
-                            <div style={{ fontSize: 12, fontWeight: 500, color: "var(--accent)", fontFamily: "'DM Mono', monospace" }}>{m.min}–{m.max}€</div>
-                            {m.conf >= 85 && <div style={{ fontSize: 8, color: "var(--green)" }}>● Preciso</div>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        options={modelNames}
+                        placeholder="es. Air Force 1, Tech Fleece, Nuptse 700..."
+                        style={S.input}
+                      />
+                      <div style={{ fontSize: 9, color: "var(--dim)", marginTop: 3 }}>Scrivi per cercare tra {modelNames.length} modelli — oppure lascia vuoto</div>
+                    </Field>
 
-                  {/* Generic types */}
-                  <div>
-                    <div style={{ fontSize: 10, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>📦 Non trovo il modello — scegli per tipo</div>
-                    {types.map((t, i) => (
-                      <div key={t.id} onClick={() => setValutaForm(p => ({ ...p, brand: selectedAddBrand, tipo: t.name, dettagli: "" }))}
-                        style={{
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                          padding: "9px 14px", background: "var(--surface)", border: "1px solid var(--border)",
-                          borderRadius: 8, marginBottom: 5, cursor: "pointer",
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--border)"}
-                      >
-                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{t.name}</span>
-                        <span style={{ fontSize: 10, color: "var(--dim)", fontFamily: "'DM Mono', monospace" }}>{t.min}–{t.max}€</span>
-                      </div>
-                    ))}
+                    {/* Tipo di capo */}
+                    <Field label={tipoLocked ? `Tipo di capo (auto: ${currentTipo})` : "Tipo di capo *"}>
+                      {tipoLocked ? (
+                        <div style={{ ...S.input, background: "var(--surface2)", color: "var(--text)", display: "flex", alignItems: "center", padding: "8px 12px" }}>
+                          {currentTipo}
+                          <span style={{ fontSize: 9, color: "var(--green)", marginLeft: 8 }}>✓ rilevato</span>
+                        </div>
+                      ) : (
+                        <select value={valutaForm.tipo} onChange={(e) => setValutaForm(p => ({...p, tipo: e.target.value}))} style={S.input}>
+                          <option value="">— Seleziona —</option>
+                          {types.map(t => <option key={t.id} value={t.name}>{t.name} ({t.min}–{t.max}€)</option>)}
+                        </select>
+                      )}
+                    </Field>
+
+                    <div style={S.formRow}>
+                      <Field label="Genere"><select value={valutaForm.genere} onChange={(e) => setValutaForm(p => ({...p, genere: e.target.value}))} style={S.input}>{GENERI.map(g => <option key={g}>{g}</option>)}</select></Field>
+                      <Field label="Taglia"><select value={valutaForm.taglia} onChange={(e) => setValutaForm(p => ({...p, taglia: e.target.value}))} style={S.input}>{TAGLIE.map(t => <option key={t}>{t}</option>)}</select></Field>
+                    </div>
+                    <div style={S.formRow}>
+                      <Field label="Colore"><select value={valutaForm.colore} onChange={(e) => setValutaForm(p => ({...p, colore: e.target.value}))} style={S.input}>{COLORI.map(c => <option key={c}>{c}</option>)}</select></Field>
+                      <Field label="Logo"><select value={valutaForm.logo} onChange={(e) => setValutaForm(p => ({...p, logo: e.target.value}))} style={S.input}>{LOGO_TYPES.map(l => <option key={l}>{l}</option>)}</select></Field>
+                    </div>
+                    <div style={S.formRow}>
+                      <Field label="Condizione"><select value={valutaForm.condizione} onChange={(e) => setValutaForm(p => ({...p, condizione: e.target.value}))} style={S.input}>{CONDIZIONI.map(c => <option key={c}>{c}</option>)}</select></Field>
+                      <Field label="Fonte"><select value={valutaForm.fonte} onChange={(e) => setValutaForm(p => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map(f => <option key={f}>{f}</option>)}</select></Field>
+                    </div>
+                    <div style={S.formRow}>
+                      <Field label="Prezzo acquisto (€)"><input type="number" value={valutaForm.costoAcquisto} onChange={(e) => setValutaForm(p => ({...p, costoAcquisto: e.target.value}))} placeholder="0.00" step="0.01" min="0" style={S.input} /></Field>
+                      <Field label="Prezzo vendita (€)"><input type="number" value={valutaForm.prezzoVendita} onChange={(e) => setValutaForm(p => ({...p, prezzoVendita: e.target.value}))} placeholder="Stima auto" step="0.01" min="0" style={S.input} /></Field>
+                    </div>
+                    <Field label="Note (opzionale)">
+                      <textarea value={valutaForm.note} onChange={(e) => setValutaForm(p => ({...p, note: e.target.value}))} placeholder="Difetti, dettagli extra..." rows={2} style={{ ...S.input, resize: "vertical", minHeight: 42 }} />
+                    </Field>
+                    <button onClick={() => {
+                      /* Use detected tipo if locked */
+                      if (detectedTipo) setValutaForm(p => ({ ...p, tipo: detectedTipo }));
+                      setTimeout(runValutazione, 10);
+                    }} style={{ ...S.addBtn, background: "var(--accent)", color: "#111" }}>🧠 Valuta</button>
                   </div>
                 </div>
               );
             })()}
 
-            {/* ── STEP 3: FORM ── */}
-            {selectedAddBrand && (valutaForm.tipo || valutaForm.dettagli) && !valutaResult && (
-              <div>
-                <button onClick={() => setValutaForm(p => ({ ...p, tipo: "", dettagli: "" }))} style={S.backBtn}><ArrowLeft size={14} /> Scegli modello</button>
-                <div style={{ marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, color: "var(--dim)", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Passo 3</div>
-                  <div style={{ fontSize: 16, color: "var(--text)", fontWeight: 600, fontFamily: "'Playfair Display', serif" }}>Dettagli del pezzo</div>
-                  <div style={{ fontSize: 12, color: "var(--accent)", fontFamily: "'DM Mono', monospace", marginTop: 4 }}>
-                    {selectedAddBrand} → {valutaForm.dettagli || valutaForm.tipo}
-                  </div>
-                </div>
-                <div style={S.card}>
-                  {valutaForm.dettagli && (
-                    <Field label="Tipo di capo">
-                      <select value={valutaForm.tipo} onChange={(e) => setValutaForm(p => ({...p, tipo: e.target.value}))} style={S.input}>
-                        {TIPI_CAPO.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </Field>
-                  )}
-                  <div style={S.formRow}>
-                    <Field label="Genere"><select value={valutaForm.genere} onChange={(e) => setValutaForm(p => ({...p, genere: e.target.value}))} style={S.input}>{GENERI.map(g => <option key={g}>{g}</option>)}</select></Field>
-                    <Field label="Taglia"><select value={valutaForm.taglia} onChange={(e) => setValutaForm(p => ({...p, taglia: e.target.value}))} style={S.input}>{TAGLIE.map(t => <option key={t}>{t}</option>)}</select></Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Colore"><select value={valutaForm.colore} onChange={(e) => setValutaForm(p => ({...p, colore: e.target.value}))} style={S.input}>{COLORI.map(c => <option key={c}>{c}</option>)}</select></Field>
-                    <Field label="Logo"><select value={valutaForm.logo} onChange={(e) => setValutaForm(p => ({...p, logo: e.target.value}))} style={S.input}>{LOGO_TYPES.map(l => <option key={l}>{l}</option>)}</select></Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Condizione"><select value={valutaForm.condizione} onChange={(e) => setValutaForm(p => ({...p, condizione: e.target.value}))} style={S.input}>{CONDIZIONI.map(c => <option key={c}>{c}</option>)}</select></Field>
-                    <Field label="Fonte"><select value={valutaForm.fonte} onChange={(e) => setValutaForm(p => ({...p, fonte: e.target.value}))} style={S.input}>{FONTI.map(f => <option key={f}>{f}</option>)}</select></Field>
-                  </div>
-                  <div style={S.formRow}>
-                    <Field label="Prezzo acquisto (€)"><input type="number" value={valutaForm.costoAcquisto} onChange={(e) => setValutaForm(p => ({...p, costoAcquisto: e.target.value}))} placeholder="0.00" step="0.01" min="0" style={S.input} /></Field>
-                    <Field label="Prezzo vendita (€)"><input type="number" value={valutaForm.prezzoVendita} onChange={(e) => setValutaForm(p => ({...p, prezzoVendita: e.target.value}))} placeholder="Stima auto" step="0.01" min="0" style={S.input} /></Field>
-                  </div>
-                  <Field label="Note (opzionale)">
-                    <textarea value={valutaForm.note} onChange={(e) => setValutaForm(p => ({...p, note: e.target.value}))} placeholder="Difetti, dettagli extra..." rows={2} style={{ ...S.input, resize: "vertical", minHeight: 42 }} />
-                  </Field>
-                  <button onClick={runValutazione} style={{ ...S.addBtn, background: "var(--accent)", color: "#111" }}>🧠 Valuta</button>
-                </div>
-              </div>
-            )}
-
-            {/* ── STEP 4: RISULTATO ── */}
+            {/* ── RISULTATO ── */}
             {valutaResult && (
               <div style={{ animation: "fadeIn 0.3s ease" }}>
-                <button onClick={() => { setValutaResult(null); setValutaForm(p => ({ ...p, tipo: "", dettagli: "", costoAcquisto: "", prezzoVendita: "", note: "" })); }} style={S.backBtn}>
+                <button onClick={() => { setValutaResult(null); setValutaForm(p => ({ ...p, dettagli: "", costoAcquisto: "", prezzoVendita: "", note: "" })); }} style={S.backBtn}>
                   <ArrowLeft size={14} /> {selectedAddBrand || "Indietro"}
                 </button>
 
-                <div style={{
-                  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
-                  padding: 24, textAlign: "center", marginBottom: 14,
-                }}>
+                <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: 24, textAlign: "center", marginBottom: 14 }}>
                   <div style={{ fontSize: 40, marginBottom: 8 }}>{valutaResult.verdictIcon}</div>
                   <div style={{ fontSize: 22, fontWeight: 600, color: valutaResult.verdictColor, fontFamily: "'Playfair Display', serif", marginBottom: 6 }}>{valutaResult.verdict}</div>
                   <div style={{ fontSize: 13, color: "var(--muted)" }}>{valutaResult.brand}{valutaForm.dettagli ? ` — ${valutaForm.dettagli}` : ` — ${valutaResult.tipo}`}</div>
@@ -808,8 +734,7 @@ export default function App() {
                       <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
                         <span style={{ fontSize: 22, fontWeight: 600, color: "var(--text)", fontFamily: "'Playfair Display', serif" }}>{valutaResult.userPrice}€</span>
                         <div style={{ fontSize: 15, fontWeight: 600, color: valutaResult.userMargin >= 0 ? "var(--green)" : "var(--red)" }}>
-                          {valutaResult.userMargin >= 0 ? "+" : ""}{valutaResult.userMargin.toFixed(2)}€
-                          {valutaResult.userMarginPct !== null && ` (${valutaResult.userMarginPct}%)`}
+                          {valutaResult.userMargin >= 0 ? "+" : ""}{valutaResult.userMargin.toFixed(2)}€{valutaResult.userMarginPct !== null && ` (${valutaResult.userMarginPct}%)`}
                         </div>
                       </div>
                     </div>
@@ -849,7 +774,7 @@ export default function App() {
                   <button onClick={addFromValuta} style={{ ...S.addBtn, flex: 1, background: "var(--accent)", color: "#111", fontSize: 13 }}>
                     <Package size={14} /> Inventario
                   </button>
-                  <button onClick={() => { setValutaResult(null); setValutaForm(p => ({ ...p, tipo: "", dettagli: "", costoAcquisto: "", prezzoVendita: "", note: "" })); }} style={{
+                  <button onClick={() => { setValutaResult(null); setValutaForm(p => ({ ...p, dettagli: "", costoAcquisto: "", prezzoVendita: "", note: "" })); }} style={{
                     ...S.addBtn, flex: 1, background: "transparent", border: "1px solid var(--border)", color: "var(--muted)", fontSize: 13,
                   }}>Valuta un altro</button>
                 </div>
